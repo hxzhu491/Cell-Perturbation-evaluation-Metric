@@ -1,0 +1,769 @@
+---
+title: "pbmc_final_revise"
+author: "Hongxu Zhu"
+always_allow_html: yes
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    theme: united
+    toc: yes
+    toc_collapsed: yes
+    toc_float: yes
+---
+
+```{r alternative-preambles,echo=FALSE,include=FALSE,eval=FALSE}
+## if using word replace output with
+output:
+  word_document:
+    toc: yes
+
+## if using pdf replace output with
+output:
+  pdf_document:
+    toc: yes
+header-includes:
+  - \usepackage{xcolor}
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+## colorizes text when using html or pdf output
+## just spits out text x for word
+colorize <- function(x, color) {
+  if(color=="todo"){
+    color <- "red"
+    x <- paste0("TODO: ",x)
+  }
+  if (knitr::is_latex_output()) {
+    sprintf("\\textcolor{%s}{%s}", color, x)
+  } else if (knitr::is_html_output()) {
+    sprintf("<span style='color: %s;'>%s</span>", color, 
+      x)
+  } else x
+}
+
+todo <- function(x){
+  paste0("**",colorize(x,"todo"),"**")
+}
+
+library(kableExtra)
+library(cmapR)
+library(edgeR)
+```
+
+This file contains the full analysis pipeline on Kang et. al 2018 PBMC purterbation dataset. The Total cell type is 7, 6998 genes are measured and the conditions are "control" and "stimulated".
+
+## Preprocessing
+
+### Input Data Set
+
+```{r}
+## input full data set
+kang_obs <- read.csv("data/kang_obs.csv")
+kang_var <- read.csv("data/kang_var.csv")
+kang_X <- read.csv("data/kang_X.csv",header=FALSE)
+names(kang_X) <- kang_var$gene_symbol
+```
+
+```{r}
+####### Get control and stimulated data
+ctype <- unique(kang_obs$cell_type)
+kang_ctr <- list()
+kang_sti <- list()
+for (i in 1:length(ctype)){
+  kang_ctr[[i]] <- kang_X[kang_obs$condition=="control" & kang_obs$cell_type==ctype[i],]
+  kang_sti[[i]] <- kang_X[kang_obs$condition=="stimulated" & kang_obs$cell_type==ctype[i],]
+}
+ctname <- c("NK","Dendritic","CD4T","B","FCGR3A","CD14","CD8T")
+names(kang_ctr) <- ctname
+names(kang_sti) <- ctname
+
+kang_ctr_m <- list()
+kang_sti_m <- list()
+for (i in 1:length(ctype)){
+  kang_ctr_m[[i]] <- apply(kang_ctr[[i]], 2, mean)
+  kang_sti_m[[i]] <- apply(kang_sti[[i]], 2, mean)
+}
+
+names(kang_ctr_m) <- ctname
+names(kang_sti_m) <- ctname
+```
+
+```{r}
+genes <- kang_var$gene_symbol
+```
+
+## Differential Gene analysis on observed data
+
+```{r}
+DEG_obs <- list()
+tables <- list()
+keeps <- list()
+for (i in 1: length(ctype)){
+  temp <- kang_X[kang_obs$cell_type==ctype[i],]
+  counts <- t(temp)
+  mycpm <- edgeR::cpm(counts)
+  thresh <- mycpm > 0.5
+  keep <- rowSums(thresh) >= 2
+  counts.keep <- counts[keep,]
+  keeps[[i]] <- rownames(counts.keep)
+  condition <- kang_obs$condition[kang_obs$cell_type==ctype[i]]
+  design <- model.matrix(~condition)
+  fit <- lmFit(counts.keep,design)
+  fit <- eBayes(fit)
+  top.table <- topTable(fit,sort.by = "logFC", n = Inf)
+  tables[[i]] <- top.table
+  DE_new <- data.frame(rownames(top.table),top.table$logFC,top.table$adj.P.Val,top.table$B)
+  names(DE_new) <- c("gene","logfc","adj.P.val","log-odds")
+  DEG_obs[[i]] <- DE_new
+}
+names(DEG_obs) <- names(kang_ctr)
+names(tables) <- names(kang_ctr)
+names(keeps) <- names(kang_ctr)
+
+p_lvl <- 0.00001
+lfc <- 0.3
+
+DEG_genes_obs <- list()
+for (i in 1: length(ctype)){
+  temp <- DEG_obs[[i]]$gene[DEG_obs[[i]]$adj.P.val<p_lvl & abs(DEG_obs[[i]]$logfc)>lfc]
+  DEG_genes_obs[[i]] <- temp
+}
+names(DEG_genes_obs) <- names(kang_ctr)
+```
+
+## Get Predictions
+
+### Get scGen Predictions
+
+```{r}
+paths <- c("results/pred_NK.csv","results/pred_Dendritic.csv","results/pred_CD4T.csv","results/pred_B.csv","results/pred_FCGR3A.csv","results/pred_CD14.csv","results/pred_CD8T.csv")
+scgen_pred <- list()
+for (i in 1: length(ctype)){
+  temp <- read.csv(paths[i])
+  temp <- temp[,-1]
+  scgen_pred[[i]] <- temp
+  names(scgen_pred[[i]]) <- genes
+}
+names(scgen_pred) <- names(kang_ctr)
+
+scgen_pred_m <- list()
+for (i in 1: length(ctype)){
+  temp <- apply(scgen_pred[[i]], 2, mean)
+  names(temp) <- genes
+  scgen_pred_m[[i]] <- temp
+}
+```
+
+### Get Cell Type Predictions
+
+```{r}
+fit <- lm(as.matrix(kang_X) ~ kang_obs$cell_type, x=TRUE)
+
+ct_pred <- list()
+for (i in 1: length(ctype)){
+  ix <- kang_obs$condition=="stimulated" & kang_obs$cell_type==ctype[i]
+  obs_test <- fit$x[ix,]
+  obs_train <- fit$x[!ix,]
+
+  X_test <-as.matrix(kang_X[ix,]) 
+  X_train <- as.matrix(kang_X[!ix,])
+
+  fit.x <- lm.fit(obs_train,X_train)
+  pred_ct <- obs_test%*%fit.x$coefficients
+  names(pred_ct) <- genes
+  ct_pred[[i]] <- pred_ct[1,]
+}
+names(ct_pred) <- names(kang_ctr)
+```
+
+### Get Two-factor Predictions
+
+```{r}
+fit <- lm(as.matrix(kang_X) ~ kang_obs$cell_type+kang_obs$condition, x=TRUE)
+
+tf_pred <- list()
+for (i in 1: length(ctype)){
+  ix <- kang_obs$condition=="stimulated" & kang_obs$cell_type==ctype[i]
+  obs_test <- fit$x[ix,]
+  obs_train <- fit$x[!ix,]
+
+  X_test <-as.matrix(kang_X[ix,]) 
+  X_train <- as.matrix(kang_X[!ix,])
+
+  fit.x <- lm.fit(obs_train,X_train)
+  pred_tf <- obs_test%*%fit.x$coefficients
+  names(pred_tf) <- genes
+  tf_pred[[i]] <- pred_tf[1,]
+}
+
+names(tf_pred) <- names(kang_ctr)
+```
+
+## Compute R2 For every cell type using 3 methods
+
+### scGen R2
+
+```{r}
+library(ggplot2)
+R2_scgen <- c()
+R2_DE_scgen <-c()
+for (i in 1: length(ctype)){
+  status <- rep("nosig", length(genes))
+  status[which(genes %in% DEG_genes_obs[[i]])] <- "sig"
+  observation <- kang_sti_m[[i]]
+  prediction <- scgen_pred_m[[i]]
+  dt <- data.frame(genes,observation,prediction,status)
+  names(dt) <- c("genes", "observation", "prediction", "status")
+  R2_scgen[i] <- round(cor(as.numeric(kang_sti_m[[i]]),as.numeric(scgen_pred_m[[i]]))^2,2)
+  R2_DE_scgen[i] <- round(cor(as.numeric(kang_sti_m[[i]][status=="sig"]),as.numeric(scgen_pred_m[[i]][status=="sig"]))^2,2)
+  
+  p <- ggplot(dt, aes(x=observation, y=prediction, color=status)) + 
+  geom_point(shape=2,alpha=0.8)+
+  geom_smooth(method=lm, na.rm = TRUE,colour="black")+
+  scale_colour_manual(name="status", values=c("blue","red"))+
+  xlab("observation") + ylab("Prediction")+ ggtitle(ctype[[i]])+
+  labs(tag = paste0("R2=",R2_scgen[i]))+ theme(plot.tag.position = "topright")
+  print(p)
+}
+
+names(R2_scgen) <- ctname
+names(R2_DE_scgen) <- ctname
+```
+
+### Cell Type R2 
+
+```{r}
+R2_ct <- c()
+R2_DE_ct <-c()
+for (i in 1: length(ctype)){
+  status <- rep("nosig", length(genes))
+  status[which(genes %in% DEG_genes_obs[[i]])] <- "sig"
+  observation <- kang_sti_m[[i]]
+  prediction <- ct_pred[[i]]
+  dt <- data.frame(genes,observation,prediction,status)
+  names(dt) <- c("genes", "observation", "prediction", "status")
+  R2_ct[i] <- round(cor(as.numeric(kang_sti_m[[i]]),as.numeric(ct_pred[[i]]))^2,2)
+  R2_DE_ct[i] <- round(cor(as.numeric(kang_sti_m[[i]][status=="sig"]),as.numeric(ct_pred[[i]][status=="sig"]))^2,2)
+  
+  p <- ggplot(dt, aes(x=observation, y=prediction, color=status)) + 
+  geom_point(shape=2,alpha=0.8)+
+  geom_smooth(method=lm, na.rm = TRUE,colour="black")+
+  scale_colour_manual(name="status", values=c("blue","red"))+
+  xlab("observation") + ylab("Prediction")+ ggtitle(ctype[[i]])+
+  labs(tag = paste0("R2=",R2_ct[i]))+ theme(plot.tag.position = "topright")
+  print(p)
+}
+
+names(R2_ct) <- ctname
+names(R2_DE_ct) <- ctname
+```
+
+### Two-factor R2 
+
+```{r}
+R2_tf <- c()
+R2_DE_tf <-c()
+for (i in 1: length(ctype)){
+  status <- rep("nosig", length(genes))
+  status[which(genes %in% DEG_genes_obs[[i]])] <- "sig"
+  observation <- kang_sti_m[[i]]
+  prediction <- tf_pred[[i]]
+  dt <- data.frame(genes,observation,prediction,status)
+  names(dt) <- c("genes", "observation", "prediction", "status")
+  R2_tf[i] <- round(cor(as.numeric(kang_sti_m[[i]]),as.numeric(tf_pred[[i]]))^2,2)
+  R2_DE_tf[i] <- round(cor(as.numeric(kang_sti_m[[i]][status=="sig"]),as.numeric(tf_pred[[i]][status=="sig"]))^2,2)
+  
+  p <- ggplot(dt, aes(x=observation, y=prediction, color=status)) + 
+  geom_point(shape=2,alpha=0.8)+
+  geom_smooth(method=lm, na.rm = TRUE,colour="black")+
+  scale_colour_manual(name="status", values=c("blue","red"))+
+  xlab("observation") + ylab("Prediction")+ ggtitle(ctype[[i]])+
+  labs(tag = paste0("R2=",R2_tf[i]))+ theme(plot.tag.position = "topright")
+  print(p)
+}
+
+names(R2_tf) <- ctname
+names(R2_DE_tf) <- ctname
+```
+
+## Generate samples from Cell type model and two-factor model
+
+### Cell type model
+
+For cell type model, the prediction mean is the same as the control mean for each cell type. So the cell type prediction should be the same as the control distribution.
+
+```{r}
+ct_dist <- kang_ctr
+names(ct_dist) <- ctname
+```
+
+### Two-factor model
+
+```{r}
+tf_dist <- list()
+for (i in 1: length(ctype)){
+  ctr <- kang_ctr[[i]]
+  df <- tf_pred[[i]]-kang_ctr_m[[i]]
+  temp <- ctr
+  for (j in 1:ncol(ctr)){
+    temp[,j] <- ctr[,j]+df[j]
+  }
+  tf_dist[[i]] <- temp
+}
+names(tf_dist) <- ctname
+```
+
+## Violin Plots for selected cell types
+
+### CD4T DE genes
+
+```{r}
+for (id in 1: length(DEG_genes_obs[[3]])){
+  test_scgen <- scgen_pred[[3]][,genes==DEG_genes_obs[[3]][id]]
+  test_ctr <- kang_ctr[[3]][,genes==DEG_genes_obs[[3]][id]]
+  test_sti <- kang_sti[[3]][,genes==DEG_genes_obs[[3]][id]]
+  test_ct <- ct_dist[[3]][,genes==DEG_genes_obs[[3]][id]]
+  test_tf <- tf_dist[[3]][,genes==DEG_genes_obs[[3]][id]]
+
+  method1 <- rep("control",length(test_ctr))
+  method2 <- rep("stimulated", length(test_sti))
+  method3 <- rep("two-factor", length(test_tf))
+  method4 <- rep("scgen", length(test_scgen))
+  method5 <- rep("cell type", length(test_ct))
+  method <- c(method1,method2,method3,method4,method5)
+  res <- c(test_ctr,test_sti,test_tf,test_scgen,test_ct)
+  d <- data.frame(res,method)
+  names(d) <- c("R2", "method")
+
+  level_order <- c("control","stimulated","cell type","two-factor","scgen")
+  p <- ggplot(d, aes(x=factor(method,level=level_order), y=R2, fill=method)) + 
+    geom_violin() +geom_boxplot(width=0.1) +
+    labs(x="Condition",
+         y=paste0("expression for ",DEG_genes_obs[[3]][id]))
+  print(p)
+}
+```
+
+### CD4T non DE genes
+
+```{r}
+CD4T_sub_genes <- genes[which(!(genes %in% DEG_genes_obs[[3]]))][1:60]
+for (id in 1: length(DEG_genes_obs[[3]])){
+  test_scgen <- scgen_pred[[3]][,genes==CD4T_sub_genes[id]]
+  test_ctr <- kang_ctr[[3]][,genes==CD4T_sub_genes[id]]
+  test_sti <- kang_sti[[3]][,genes==CD4T_sub_genes[id]]
+  test_ct <- ct_dist[[3]][,genes==CD4T_sub_genes[id]]
+  test_tf <- tf_dist[[3]][,genes==CD4T_sub_genes[id]]
+
+  method1 <- rep("control",length(test_ctr))
+  method2 <- rep("stimulated", length(test_sti))
+  method3 <- rep("two-factor", length(test_tf))
+  method4 <- rep("scgen", length(test_scgen))
+  method5 <- rep("cell type", length(test_ct))
+  method <- c(method1,method2,method3,method4,method5)
+  res <- c(test_ctr,test_sti,test_tf,test_scgen,test_ct)
+  d <- data.frame(res,method)
+  names(d) <- c("R2", "method")
+
+  level_order <- c("control","stimulated","cell type","two-factor","scgen")
+  p <- ggplot(d, aes(x=factor(method,level=level_order), y=R2, fill=method)) + 
+    geom_violin() +geom_boxplot(width=0.1) +
+    labs(x="Condition",
+         y=paste0("expression for ",CD4T_sub_genes[id]))
+  print(p)
+}
+```
+
+## Volcano Plots
+
+### Volcano Plots on Observed Data
+
+```{r, fig.height=5}
+library(EnhancedVolcano)
+
+for (i in 1: length(ctype)){
+  v <- EnhancedVolcano(tables[[i]],
+       lab = keeps[[i]],
+       x = 'logFC',
+       y = 'adj.P.Val',
+       pCutoff=1e-10,
+       FCcutoff = 0.3)
+  print(v)
+}
+```
+
+### Volcano plots using predictions
+
+Need to conduct DEG on predictions
+
+#### DEG two-factor model
+
+```{r}
+DEG_tf <- list()
+tables_tf <- list()
+keeps_tf <- list()
+for (i in 1: length(ctype)){
+  temp <- data.frame(rbind(kang_ctr[[i]],tf_dist[[i]]))
+  counts <- t(temp)
+  mycpm <- edgeR::cpm(counts)
+  thresh <- mycpm > 0.5
+  keep <- rowSums(thresh) >= 2
+  counts.keep <- counts[keep,]
+  keeps_tf[[i]] <- rownames(counts.keep)
+  condition <- c(rep("control",nrow(kang_ctr[[i]])),rep("prediction",nrow(tf_dist[[i]])))
+  design <- model.matrix(~condition)
+  fit <- lmFit(counts.keep,design)
+  fit <- eBayes(fit)
+  top.table <- topTable(fit,sort.by = "logFC", n = Inf)
+  tables_tf[[i]] <- top.table
+  DE_tf_new <- data.frame(rownames(top.table),top.table$logFC,top.table$adj.P.Val,top.table$B)
+  names(DE_tf_new) <- c("gene","logfc","adj.P.val","log-odds")
+  DEG_tf[[i]] <- DE_tf_new
+}
+names(DEG_tf) <- names(kang_ctr)
+names(tables_tf) <- names(kang_ctr)
+names(keeps_tf) <- names(kang_ctr)
+
+p_lvl <- 0.00001
+lfc <- 0.3
+
+DEG_genes_tf <- list()
+for (i in 1: length(ctype)){
+  temp <- DEG_tf[[i]]$gene[DEG_tf[[i]]$adj.P.val<p_lvl & abs(DEG_tf[[i]]$logfc)>lfc]
+  DEG_genes_tf[[i]] <- temp
+}
+names(DEG_genes_tf) <- names(kang_ctr)
+```
+
+#### Volcano Plots two-factor
+
+```{r, fig.height=5}
+for (i in 1: length(ctype)){
+  v <- EnhancedVolcano(tables_tf[[i]],
+       lab = keeps_tf[[i]],
+       x = 'logFC',
+       y = 'adj.P.Val',
+       pCutoff=1e-10,
+       FCcutoff = 0.3)
+  print(v)
+}
+```
+
+#### DEG scgen prediction
+
+```{r}
+DEG_scgen <- list()
+tables_scgen <- list()
+keeps_scgen <- list()
+for (i in 1: length(ctype)){
+  temp <- data.frame(rbind(kang_ctr[[i]],scgen_pred[[i]]))
+  counts <- t(temp)
+  mycpm <- edgeR::cpm(counts)
+  thresh <- mycpm > 0.5
+  keep <- rowSums(thresh) >= 2
+  counts.keep <- counts[keep,]
+  keeps_scgen[[i]] <- rownames(counts.keep)
+  condition <- c(rep("control",nrow(kang_ctr[[i]])),rep("prediction",nrow(scgen_pred[[i]])))
+  design <- model.matrix(~condition)
+  fit <- lmFit(counts.keep,design)
+  fit <- eBayes(fit)
+  top.table <- topTable(fit,sort.by = "logFC", n = Inf)
+  tables_scgen[[i]] <- top.table
+  DE_scgen_new <- data.frame(rownames(top.table),top.table$logFC,top.table$adj.P.Val,top.table$B)
+  names(DE_scgen_new) <- c("gene","logfc","adj.P.val","log-odds")
+  DEG_scgen[[i]] <- DE_scgen_new
+}
+names(DEG_scgen) <- names(kang_ctr)
+names(tables_scgen) <- names(kang_ctr)
+names(keeps_scgen) <- names(kang_ctr)
+
+p_lvl <- 0.00001
+lfc <- 0.3
+
+DEG_genes_scgen <- list()
+for (i in 1: length(ctype)){
+  temp <- DEG_scgen[[i]]$gene[DEG_scgen[[i]]$adj.P.val<p_lvl & abs(DEG_scgen[[i]]$logfc)>lfc]
+  DEG_genes_scgen[[i]] <- temp
+}
+names(DEG_genes_scgen) <- names(kang_ctr)
+```
+
+#### Volcano Plots scgen
+
+```{r, fig.height=5}
+for (i in 1: length(ctype)){
+  v <- EnhancedVolcano(tables_scgen[[i]],
+       lab = keeps_scgen[[i]],
+       x = 'logFC',
+       y = 'adj.P.Val',
+       pCutoff=1e-10,
+       FCcutoff = 0.3)
+  print(v)
+}
+```
+
+## Evaluating prediction using ROC
+
+### Method 1: scoring based on log fold change
+
+```{r}
+score_scgen <- list()
+score_ct <- list()
+score_tf <- list()
+for (i in 1: length(ctype)){
+  score_scgen[[i]] <- rep(0,length(genes))
+  score_ct[[i]] <- rep(0,length(genes))
+  score_tf[[i]] <- rep(0,length(genes))
+  test1 <- tables_scgen[[i]]
+  test1.re <- test1[order(match(rownames(test1),keeps_scgen[[i]])),]
+  score_scgen[[i]][which(rownames(counts) %in% keeps_scgen[[i]])] <- abs(test1.re$logFC)
+  test2 <- tables_tf[[i]]
+  test2.re <- test2[order(match(rownames(test2),keeps_tf[[i]])),]
+  score_tf[[i]][which(rownames(counts) %in% keeps_tf[[i]])] <- abs(test2.re$logFC)
+}
+
+names(score_scgen) <- ctname
+names(score_ct) <- ctname
+names(score_tf) <- ctname
+```
+
+### ROC curves
+
+```{r}
+library(pROC)
+auc_scgen <- c()
+auc_tf <- c()
+auc_ct <- c()
+for (i in 1: length(ctype)){
+  dt <- data.frame(t(rep(0,length(genes))))
+  names(dt) <- rownames(counts)
+  dt[which(rownames(counts) %in% DEG_genes_obs[[i]])] <- 1
+  dt <- t(dt)
+  pred1 <- as.numeric(score_scgen[[i]])
+  pred2 <- as.numeric(score_ct[[i]])
+  pred3 <- as.numeric(score_tf[[i]])
+  sim_roc1 <- roc(response = as.vector(dt),
+                 predictor = pred1,
+                 levels = c(0,1))
+  sim_roc2 <- roc(response = as.vector(dt),
+                 predictor = rep(0,length(pred2)),
+                 levels = c(0,1))
+  sim_roc3 <- roc(response = as.vector(dt),
+                 predictor = pred3,
+                 levels = c(0,1))
+  auc_scgen[i] <- auc(sim_roc1)
+  auc_ct[i] <- auc(sim_roc2)
+  auc_tf[i] <- auc(sim_roc3)
+  pred_names <- c("scgen","cell type","two factor")
+  touse <- list(sim_roc1,sim_roc2,sim_roc3)
+  names(touse) <- pred_names
+  g2 <- ggroc(touse)
+  g2 <- g2 + xlab("Specificity (# Predicted non-DE gene / # True non-DE gene)") + ylab("Sensitivity (# Predicted DE   gene / # True DE gene)")
+  print(g2)
+}
+```
+
+## Other metrics for evaluating prediction results
+
+### Confusion Matrices
+
+```{r}
+library(caret)
+scgen_cfm <- list()
+tf_cfm <- list()
+for (i in 1: length(ctype)){
+  true <- rep(0,length(genes))
+  true[which(genes %in% DEG_genes_obs[[i]])] <- 1
+  tf <- rep(0,length(genes))
+  tf[which(genes %in% DEG_genes_tf[[i]])] <- 1
+  scgen <- rep(0,length(genes))
+  scgen[which(genes %in% DEG_genes_scgen[[i]])] <- 1
+  scgen_cfm[[i]] <- confusionMatrix(data=as.factor(scgen), reference = as.factor(true), positive="1")
+  tf_cfm[[i]] <- confusionMatrix(data=as.factor(tf), reference = as.factor(true), positive="1")
+}
+names(scgen_cfm) <- ctname
+names(tf_cfm) <- ctname
+```
+
+### scatter plot: true logfc vs predicted logfc
+
+#### scGen
+
+```{r}
+for (i in 1: length(ctype)){
+  tr.lfc <- rep(0,length(genes))
+  test <- tables[[i]]
+  test.re <- test[order(match(rownames(test),keeps[[i]])),] 
+  tr.lfc[which(genes %in% keeps[[i]])] <- test.re$logFC
+  scgen.lfc <- rep(0,length(genes))
+  test1 <- tables_scgen[[i]]
+  test1.re <- test1[order(match(rownames(test1),keeps_scgen[[i]])),]
+  scgen.lfc[which(rownames(counts) %in% keeps_scgen[[i]])] <- test1.re$logFC
+  
+  status <- rep("nosig", length(genes))
+  status[which(genes %in% DEG_genes_obs[[i]] & genes %in% DEG_genes_scgen[[i]])] <- "True positive"
+  status[which(genes %in% DEG_genes_obs[[i]] & !(genes %in% DEG_genes_scgen[[i]]))] <- "False negative"
+  status[which(!(genes %in% DEG_genes_obs[[i]]) & genes %in% DEG_genes_scgen[[i]])] <- "False positive"
+  status[which(!(genes %in% DEG_genes_obs[[i]]) & !(genes %in% DEG_genes_scgen[[i]]))] <- "True negative"
+  dt <- data.frame(genes,tr.lfc,scgen.lfc,status)
+  names(dt) <- c("genes", "observation", "prediction", "status")
+  
+  p <- ggplot(dt, aes(x=observation, y=prediction, color=status)) + 
+  geom_point(shape=1,alpha=0.8)+
+  geom_hline(yintercept=0.3, linetype="dashed", color = "black")+
+  geom_hline(yintercept=-0.3, linetype="dashed", color = "black")+
+  geom_vline(xintercept=0.3, linetype="dashed", color = "black")+
+  geom_vline(xintercept=-0.3, linetype="dashed", color = "black")+
+  xlab("True Logfc") + ylab("Predicted Logfc")+ ggtitle(ctype[[i]])+
+  theme(plot.tag.position = "topright")
+  print(p)
+}
+```
+
+#### Two-factor
+
+```{r}
+for (i in 1: length(ctype)){
+  tr.lfc <- rep(0,length(genes))
+  test <- tables[[i]]
+  test.re <- test[order(match(rownames(test),keeps[[i]])),] 
+  tr.lfc[which(genes %in% keeps[[i]])] <- test.re$logFC
+  tf.lfc <- rep(0,length(genes))
+  test1 <- tables_tf[[i]]
+  test1.re <- test1[order(match(rownames(test1),keeps_tf[[i]])),]
+  tf.lfc[which(rownames(counts) %in% keeps_tf[[i]])] <- test1.re$logFC
+  
+  status <- rep("nosig", length(genes))
+  status[which(genes %in% DEG_genes_obs[[i]] & genes %in% DEG_genes_tf[[i]])] <- "True positive"
+  status[which(genes %in% DEG_genes_obs[[i]] & !(genes %in% DEG_genes_tf[[i]]))] <- "False negative"
+  status[which(!(genes %in% DEG_genes_obs[[i]]) & genes %in% DEG_genes_tf[[i]])] <- "False positive"
+  status[which(!(genes %in% DEG_genes_obs[[i]]) & !(genes %in% DEG_genes_tf[[i]]))] <- "True negative"
+  dt <- data.frame(genes,tr.lfc,tf.lfc,status)
+  names(dt) <- c("genes", "observation", "prediction", "status")
+  
+  p <- ggplot(dt, aes(x=observation, y=prediction, color=status)) + 
+  geom_point(shape=1,alpha=0.8)+
+  geom_hline(yintercept=0.3, linetype="dashed", color = "black")+
+  geom_hline(yintercept=-0.3, linetype="dashed", color = "black")+
+  geom_vline(xintercept=0.3, linetype="dashed", color = "black")+
+  geom_vline(xintercept=-0.3, linetype="dashed", color = "black")+
+  xlab("True Logfc") + ylab("Predicted Logfc")+ ggtitle(ctype[[i]])+
+  theme(plot.tag.position = "topright")
+  print(p)
+}
+```
+
+### Precision-Recall curve
+
+```{r}
+library(yardstick)
+library(dplyr)
+pr_auc_scgen <- list()
+pr_auc_tf <- list()
+for (i in 1: length(ctype)){
+  true <- rep(0,length(genes))
+  true[which(genes %in% DEG_genes_obs[[i]])] <- 1
+  dt <- data.frame(as.factor(true),score_scgen[[i]])
+  names(dt) <- c("true","score")
+  dt2 <- data.frame(as.factor(true),score_tf[[i]])
+  names(dt2) <- c("true","score")
+  dtf <- rbind(dt,dt2)
+  method <- c(rep("scgen",nrow(dt)),rep("two-factor",nrow(dt2)))
+  dtf <- data.frame(dtf,method)
+  pr_auc_scgen[[i]] <- pr_auc(dt, true, score, event_level = "second")
+  pr_auc_tf[[i]] <- pr_auc(dt2, true, score, event_level = "second")
+  p <- dtf %>%
+         group_by(method) %>%
+         pr_curve(true, score, event_level = "second") %>%
+         ggplot(aes(x = recall, y = precision, color=method)) +
+         geom_path() +
+         coord_equal() +
+         theme_bw()+
+         ggtitle(ctype[[i]])
+         print(p)
+}
+```
+
+### Compare True DE genes and Predicted DE genes
+
+```{r}
+tp_genes_scgen <- list()
+tp_genes_tf <- list()
+for (i in 1:length(ctype)){
+  tp_genes_scgen[[i]] <- intersect(DEG_genes_obs[[i]],DEG_genes_scgen[[i]])
+  tp_genes_tf[[i]] <- intersect(DEG_genes_obs[[i]],DEG_genes_tf[[i]])
+}
+```
+
+### Genes differentially expressed across all cell types
+
+```{r}
+int_genes <- Reduce(intersect, list(DEG_genes_obs[[1]],DEG_genes_obs[[2]],DEG_genes_obs[[3]],DEG_genes_obs[[4]],DEG_genes_obs[[5]],DEG_genes_obs[[6]],DEG_genes_obs[[7]]))
+```
+
+#### Can scgen and two-factor model correctly predict those genes?
+
+```{r}
+tpsub_genes_scgen <- list()
+tpsub_genes_tf <- list()
+for (i in 1:length(ctype)){
+  tpsub_genes_scgen[[i]] <- intersect(int_genes,DEG_genes_scgen[[i]])
+  tpsub_genes_tf[[i]] <- intersect(int_genes,DEG_genes_tf[[i]])
+}
+```
+
+Two factor model can successfully predict those DE genes.
+
+### Cell type specific DE genes
+
+```{r}
+cts_genes <- list()
+for (i in 1:length(ctype)){
+  cts_genes[[i]] <- DEG_genes_obs[[i]][!DEG_genes_obs[[i]] %in% int_genes]
+}
+```
+
+#### Compare the performance of predicting cell type specific DE Genes
+
+```{r}
+cts_genes_scgen <- list()
+cts_genes_tf <- list()
+for (i in 1:length(ctype)){
+  cts_genes_scgen[[i]] <- intersect(cts_genes[[i]],DEG_genes_scgen[[i]])
+  cts_genes_tf[[i]] <- intersect(cts_genes[[i]],DEG_genes_tf[[i]])
+}
+```
+
+### Precision recall curve with current threshold
+
+```{r}
+for (i in 1: length(ctype)){
+  true <- rep(0,length(genes))
+  true[which(genes %in% DEG_genes_obs[[i]])] <- 1
+  dt <- data.frame(as.factor(true),score_scgen[[i]])
+  names(dt) <- c("true","score")
+  dt2 <- data.frame(as.factor(true),score_tf[[i]])
+  names(dt2) <- c("true","score")
+  dtf <- rbind(dt,dt2)
+  method <- c(rep("scgen",nrow(dt)),rep("two-factor",nrow(dt2)))
+  dtf <- data.frame(dtf,method)
+  pr_auc_scgen[[i]] <- pr_auc(dt, true, score, event_level = "second")
+  pr_auc_tf[[i]] <- pr_auc(dt2, true, score, event_level = "second")
+  p <- dtf %>%
+         group_by(method) %>%
+         pr_curve(true, score, event_level = "second") %>%
+         ggplot(aes(x = recall, y = precision, color=method)) +
+         geom_vline(xintercept = length(tp_genes_scgen[[i]])/length(DEG_genes_obs[[i]]),color="red",linetype="dashed")+
+         geom_vline(xintercept = length(tp_genes_tf[[i]])/length(DEG_genes_obs[[i]]),color="light blue",linetype="dashed")+
+         geom_path() +
+         coord_equal() +
+         theme_bw()+
+         ggtitle(ctype[[i]])
+         print(p)
+}
+```
+
+
+
