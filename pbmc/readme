@@ -1,1 +1,3 @@
-In this folder, we test the new evaluation approach on pbmc data from Kang et al. 2018
+## In this folder, we test the new evaluation approach on pbmc data from Kang et al. 2018
+## The python files are used to output csv data from h5ad, and to run scgen on the dataset.
+## The rmd file is the main R code for generating plots and results.
