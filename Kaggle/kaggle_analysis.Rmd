@@ -1,0 +1,218 @@
+---
+title: "kaggle_analysis"
+author: "Hongxu Zhu"
+always_allow_html: yes
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    theme: united
+    toc: yes
+    toc_collapsed: yes
+    toc_float: yes
+---
+
+```{r alternative-preambles,echo=FALSE,include=FALSE,eval=FALSE}
+## if using word replace output with
+output:
+  word_document:
+    toc: yes
+
+## if using pdf replace output with
+output:
+  pdf_document:
+    toc: yes
+header-includes:
+  - \usepackage{xcolor}
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+## colorizes text when using html or pdf output
+## just spits out text x for word
+colorize <- function(x, color) {
+  if(color=="todo"){
+    color <- "red"
+    x <- paste0("TODO: ",x)
+  }
+  if (knitr::is_latex_output()) {
+    sprintf("\\textcolor{%s}{%s}", color, x)
+  } else if (knitr::is_html_output()) {
+    sprintf("<span style='color: %s;'>%s</span>", color, 
+      x)
+  } else x
+}
+
+todo <- function(x){
+  paste0("**",colorize(x,"todo"),"**")
+}
+
+library(kableExtra)
+library(cmapR)
+library(edgeR)
+```
+
+## Data input and pre-preocessing
+
+```{r}
+load(file="datasets/bulk_counts.Rda")
+length(unique(bulk_counts$gene))
+length(bulk_counts$bulk_id)
+```
+
+```{r}
+library(tidyr)
+bc_data <- bulk_counts %>% pivot_wider(names_from = gene, values_from = count)
+bc_data[is.na(bc_data)] <- 0
+```
+
+```{r}
+length(unique(bc_data$bulk_id))
+length(unique(paste0(bc_data$cell_type,bc_data$sm_lincs_id)))
+
+```
+
+```{r}
+unique(bc_data$sm_lincs_id)
+nrow(bc_data[bc_data$sm_lincs_id=="LSM-43181" & bc_data$cell_type=="B cells",1:10])
+```
+
+This is a pseudobulked data. Here, pseudobulked means we summed the raw counts for all cells of a given type for each well in the experiment. Following the Kaggle description, the DE gene analysis is performed on pseudobulked data. Here, we fit a limma model including donor, plate, library as covariates.
+
+```{r}
+## Figure out lincs id for DMSO, Dabrafenib and Belinostat)
+DMSO_id <- unique(train_meta$sm_lincs_id[train_meta$sm_name=="Dimethyl Sulfoxide"])
+Dab_id <- unique(train_meta$sm_lincs_id[train_meta$sm_name=="Dabrafenib"])
+Bel_id <- unique(train_meta$sm_lincs_id[train_meta$sm_name=="Belinostat"])
+```
+
+```{r}
+## Control Data sets
+DMSO_data <- bc_data[bc_data$sm_lincs_id==DMSO_id,]
+Dab_data <- bc_data[bc_data$sm_lincs_id==Dab_id,]
+Bel_data <- bc_data[bc_data$sm_lincs_id==Bel_id,]
+```
+
+```{r}
+test1 <- data.frame(rbind(DMSO_data,Dab_data))
+test2 <- data.frame(rbind(DMSO_data,Bel_data))
+```
+
+## DE Gene analysis, positive control vs negative control
+
+```{r}
+ctype <- unique(test1$cell_type)
+temp1 <- test1[test1$cell_type ==ctype[1],]
+temp <- test1[test1$cell_type ==ctype[1],-(1:7)]
+counts <- t(temp)
+
+d0 <- DGEList(counts)
+d0 <- calcNormFactors(d0)
+d0
+
+cutoff <- 3
+drop <- which(apply(cpm(d0), 1, max) < cutoff)
+d <- d0[-drop,] 
+dim(d)
+
+condition <- as.character(temp1$sm_lincs_id)
+condition[condition==DMSO_id] <- "DMSO"
+condition[condition==Dab_id] <- "Dabrafenib"
+group <- as.factor(condition)
+
+plate <- temp1$plate_name
+donor <- temp1$donor_id
+lib <- temp1$library_id
+
+
+plotMDS(d, col = as.numeric(group))
+
+mm <- model.matrix(~0 + group+plate+donor+lib)
+
+y <- voom(d, mm, plot = T)
+
+fit <- lmFit(y, mm)
+head(coef(fit))
+
+contr <- makeContrasts(`groupDabrafenib` - `groupDMSO`, levels = colnames(coef(fit)))
+contr
+tmp <- contrasts.fit(fit, contr)
+tmp <- eBayes(tmp)
+
+
+top.table <- topTable(tmp, sort.by = "logFC", n = Inf)
+head(top.table, 20)
+
+```
+```{r, fig.height=5}
+v <- EnhancedVolcano(top.table,
+       lab = rownames(d$counts),
+       x = 'logFC',
+       y = 'adj.P.Val',
+       pCutoff=0.01,
+       FCcutoff = 1)
+print(v)
+```
+
+```{r}
+ctype <- unique(test2$cell_type)
+temp1 <- test2[test2$cell_type ==ctype[1],]
+temp <- test2[test2$cell_type ==ctype[1],-(1:7)]
+counts <- t(temp)
+
+d0 <- DGEList(counts)
+d0 <- calcNormFactors(d0)
+d0
+
+cutoff <- 3
+drop <- which(apply(cpm(d0), 1, max) < cutoff)
+d <- d0[-drop,] 
+dim(d)
+
+condition <- as.character(temp1$sm_lincs_id)
+condition[condition==DMSO_id] <- "DMSO"
+condition[condition==Bel_id] <- "Belinostat"
+group <- as.factor(condition)
+
+plate <- temp1$plate_name
+donor <- temp1$donor_id
+lib <- temp1$library_id
+
+
+plotMDS(d, col = as.numeric(group))
+
+mm <- model.matrix(~0 + group+plate+donor+lib)
+
+y <- voom(d, mm, plot = T)
+
+fit <- lmFit(y, mm)
+head(coef(fit))
+
+contr <- makeContrasts(`groupBelinostat` - `groupDMSO`, levels = colnames(coef(fit)))
+contr
+tmp <- contrasts.fit(fit, contr)
+tmp <- eBayes(tmp)
+
+
+top.table <- topTable(tmp, sort.by = "logFC", n = Inf)
+head(top.table, 20)
+
+```
+```{r, fig.height=5}
+v <- EnhancedVolcano(top.table,
+       lab = rownames(d$counts),
+       x = 'logFC',
+       y = 'adj.P.Val',
+       pCutoff=0.01,
+       FCcutoff = 1)
+print(v)
+```
+
+
+```{r}
+for (i in 1: length(unique(bc_data$sm_lincs_id))){
+  smp_data <- bc_data[bc_data$sm_lincs_id==unique(bc_data$sm_lincs_id)[i],]
+  print(nrow(smp_data))
+}
+
+```
