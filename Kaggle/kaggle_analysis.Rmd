@@ -58,6 +58,7 @@ library(edgeR)
 load(file="datasets/bulk_counts.Rda")
 length(unique(bulk_counts$gene))
 length(bulk_counts$bulk_id)
+train_meta <- read.csv("datasets/adata_obs_meta.csv")
 ```
 
 ```{r}
@@ -145,6 +146,7 @@ head(top.table, 20)
 
 ```
 ```{r, fig.height=5}
+library(EnhancedVolcano)
 v <- EnhancedVolcano(top.table,
        lab = rownames(d$counts),
        x = 'logFC',
@@ -208,11 +210,720 @@ v <- EnhancedVolcano(top.table,
 print(v)
 ```
 
+For convenient, substitute Lincs ID to perturbation name
 
 ```{r}
-for (i in 1: length(unique(bc_data$sm_lincs_id))){
-  smp_data <- bc_data[bc_data$sm_lincs_id==unique(bc_data$sm_lincs_id)[i],]
-  print(nrow(smp_data))
+perturbation <- train_meta$sm_name[bc_data$sm_lincs_id]
+perturbation[perturbation=="Dimethyl Sulfoxide"] <- "DMSO"
+bc_meta <- data.frame(cbind(bc_data[,1:7],perturbation))
+bc_expression <- bc_data[,-(1:7)]
+```
+
+## Pre-process for model fitting
+
+```{r}
+### Normalize count data with limma
+### For the whole dataset, consider donor as group factor
+count <- t(bc_expression)
+dge <- DGEList(count, group = bc_meta$donor_id)
+dge <- calcNormFactors(dge)
+cutoff <- 3
+drop <- which(apply(cpm(dge), 1, max) < cutoff)
+dge.filt <- dge[-drop,] 
+dim(dge.filt)
+
+count.filt <- dge.filt$counts
+
+## first try manurally log transformation
+
+count.filt.log <- log2(count.filt+1)
+
+
+
+#mm <- model.matrix( ~ group, data=dge.filt$samples)
+#v <- voom(dge.filt, design = mm, plot = TRUE)
+
+#library(qsmooth)
+#qs <- qsmooth(object = count, group_factor = bc_meta$donor_id)
+#View(qs@qsmoothData)
+```
+
+### Work on log transformed data
+
+```{r}
+## create datasets for each donor
+
+log.exp <- data.frame(t(count.filt.log))
+log.exp.d0 <- log.exp[bc_data$donor_id=="donor_0",]
+log.exp.d1 <- log.exp[bc_data$donor_id=="donor_1",]
+log.exp.d2 <- log.exp[bc_data$donor_id=="donor_2",]
+
+meta.d0 <- bc_meta[bc_data$donor_id=="donor_0",]
+meta.d1 <- bc_meta[bc_data$donor_id=="donor_1",]
+meta.d2 <- bc_meta[bc_data$donor_id=="donor_2",]
+```
+
+### Benchmark models for each donor
+
+
+```{r}
+## aggregate expression for each pair
+## for donor d0, create data frame for model fitting
+cell_type <- meta.d0$cell_type
+perturbation <- meta.d0$perturbation
+plate <- meta.d0$plate_name
+library_id <- meta.d0$library_id
+donor <- meta.d0$donor_id
+d0.data <- data.frame(cbind(cell_type, perturbation, plate, library_id, donor, log.exp.d0))
+cmb <- paste0(cell_type,"+",perturbation)
+
+grp_list <- list()
+for (i in 1: length(unique(cmb))){
+  grp_list[[i]] <- log.exp.d0[cmb==unique(cmb)[i],]
 }
 
+grp_mean_list <- list()
+for (i in 1: length(grp_list)){
+  if (nrow(grp_list[[i]])==1){
+    grp_mean_list[[i]] <- as.numeric(grp_list[[i]])
+  }else{
+    grp_mean_list[[i]] <- apply(grp_list[[i]],2,mean)
+  }
+}
+
+d0.aggr <- data.frame()
+for (i in 1:length(grp_mean_list)){
+  d0.aggr <- data.frame(rbind(d0.aggr,grp_mean_list[[i]]))
+}
+
+names(d0.aggr) <- names(log.exp.d0)
+cmb.u <- unique(cmb)
+cell_type <- sub("\\+.*","",cmb.u)
+perturbation <- sub(".*\\+","",cmb.u)
+
+d0.aggr <- data.frame(cbind(cell_type,perturbation,d0.aggr))
+d0.aggr.expr <- d0.aggr[,-c(1,2)]
+```
+
+```{r}
+## Repeat same process wtih d1 and d2
+cell_type <- meta.d1$cell_type
+perturbation <- meta.d1$perturbation
+plate <- meta.d1$plate_name
+library_id <- meta.d1$library_id
+donor <- meta.d1$donor_id
+d1.data <- data.frame(cbind(cell_type, perturbation, plate, library_id, donor, log.exp.d1))
+cmb <- paste0(cell_type,"+",perturbation)
+
+grp_list <- list()
+for (i in 1: length(unique(cmb))){
+  grp_list[[i]] <- log.exp.d1[cmb==unique(cmb)[i],]
+}
+
+grp_mean_list <- list()
+for (i in 1: length(grp_list)){
+  if (nrow(grp_list[[i]])==1){
+    grp_mean_list[[i]] <- as.numeric(grp_list[[i]])
+  }else{
+    grp_mean_list[[i]] <- apply(grp_list[[i]],2,mean)
+  }
+}
+
+d1.aggr <- data.frame()
+for (i in 1:length(grp_mean_list)){
+  d1.aggr <- data.frame(rbind(d1.aggr,grp_mean_list[[i]]))
+}
+
+names(d1.aggr) <- names(log.exp.d1)
+cmb.u <- unique(cmb)
+cell_type <- sub("\\+.*","",cmb.u)
+perturbation <- sub(".*\\+","",cmb.u)
+
+d1.aggr <- data.frame(cbind(cell_type,perturbation,d1.aggr))
+d1.aggr.expr <- d1.aggr[,-c(1,2)]
+
+###############
+
+cell_type <- meta.d2$cell_type
+perturbation <- meta.d2$perturbation
+plate <- meta.d2$plate_name
+library_id <- meta.d2$library_id
+donor <- meta.d2$donor_id
+d2.data <- data.frame(cbind(cell_type, perturbation, plate, library_id, donor, log.exp.d2))
+cmb <- paste0(cell_type,"+",perturbation)
+
+grp_list <- list()
+for (i in 1: length(unique(cmb))){
+  grp_list[[i]] <- log.exp.d2[cmb==unique(cmb)[i],]
+}
+
+grp_mean_list <- list()
+for (i in 1: length(grp_list)){
+  if (nrow(grp_list[[i]])==1){
+    grp_mean_list[[i]] <- as.numeric(grp_list[[i]])
+  }else{
+    grp_mean_list[[i]] <- apply(grp_list[[i]],2,mean)
+  }
+}
+
+d2.aggr <- data.frame()
+for (i in 1:length(grp_mean_list)){
+  d2.aggr <- data.frame(rbind(d2.aggr,grp_mean_list[[i]]))
+}
+
+names(d2.aggr) <- names(log.exp.d2)
+cmb.u <- unique(cmb)
+cell_type <- sub("\\+.*","",cmb.u)
+perturbation <- sub(".*\\+","",cmb.u)
+
+d2.aggr <- data.frame(cbind(cell_type,perturbation,d2.aggr))
+d2.aggr.expr <- d2.aggr[,-c(1,2)]
+```
+
+
+```{r}
+## Cellular model
+## get prediction for Foretinib for d0
+
+fit <- lm(as.matrix(d0.aggr.expr) ~ d0.aggr$cell_type, x=TRUE)
+ctype <- unique(d0.aggr$cell_type)[-(1:2)]
+
+ct_pred0 <- list()
+for (i in 1: length(ctype)){
+  ix <- d0.aggr$perturbation=="Foretinib" & d0.aggr$cell_type==ctype[i]
+  obs_test <- fit$x[ix,]
+  obs_train <- fit$x[!ix,]
+
+  X_test <-as.matrix(d0.aggr.expr[ix,]) 
+  X_train <- as.matrix(d0.aggr.expr[!ix,])
+
+  fit.x <- lm.fit(obs_train,X_train)
+  pred_ct <- obs_test%*%fit.x$coefficients
+  names(pred_ct) <- names(log.exp.d0)
+  ct_pred0[[i]] <- pred_ct[1,]
+}
+names(ct_pred0) <- ctype
+
+## get prediction for Foretinib for d1
+
+fit <- lm(as.matrix(d1.aggr.expr) ~ d1.aggr$cell_type, x=TRUE)
+ctype <- unique(d1.aggr$cell_type)[-(1:2)]
+
+ct_pred1 <- list()
+for (i in 1: length(ctype)){
+  ix <- d1.aggr$perturbation=="Foretinib" & d1.aggr$cell_type==ctype[i]
+  obs_test <- fit$x[ix,]
+  obs_train <- fit$x[!ix,]
+
+  X_test <-as.matrix(d1.aggr.expr[ix,]) 
+  X_train <- as.matrix(d1.aggr.expr[!ix,])
+
+  fit.x <- lm.fit(obs_train,X_train)
+  pred_ct <- obs_test%*%fit.x$coefficients
+  names(pred_ct) <- names(log.exp.d1)
+  ct_pred1[[i]] <- pred_ct[1,]
+}
+names(ct_pred1) <- ctype
+
+## get prediction for Foretinib for d2
+
+fit <- lm(as.matrix(d2.aggr.expr) ~ d2.aggr$cell_type, x=TRUE)
+ctype <- unique(d2.aggr$cell_type)[-(1:2)]
+
+ct_pred2 <- list()
+for (i in 1: length(ctype)){
+  ix <- d2.aggr$perturbation=="Foretinib" & d2.aggr$cell_type==ctype[i]
+  obs_test <- fit$x[ix,]
+  obs_train <- fit$x[!ix,]
+
+  X_test <-as.matrix(d2.aggr.expr[ix,]) 
+  X_train <- as.matrix(d2.aggr.expr[!ix,])
+
+  fit.x <- lm.fit(obs_train,X_train)
+  pred_ct <- obs_test%*%fit.x$coefficients
+  names(pred_ct) <- names(log.exp.d2)
+  ct_pred2[[i]] <- pred_ct[1,]
+}
+names(ct_pred2) <- ctype
+```
+
+```{r}
+## Perturbation model
+## get prediction for Foretinib for d0
+
+fit <- lm(as.matrix(d0.aggr.expr) ~ d0.aggr$perturbation, x=TRUE)
+
+pt_pred0 <- list()
+for (i in 1: length(ctype)){
+  ix <- d0.aggr$perturbation=="Foretinib" & d0.aggr$cell_type==ctype[i]
+  obs_test <- fit$x[ix,]
+  obs_train <- fit$x[!ix,]
+
+  X_test <-as.matrix(d0.aggr.expr[ix,]) 
+  X_train <- as.matrix(d0.aggr.expr[!ix,])
+
+  fit.x <- lm.fit(obs_train,X_train)
+  pred_pt <- obs_test%*%fit.x$coefficients
+  names(pred_ct) <- names(log.exp.d0)
+  pt_pred0[[i]] <- pred_pt[1,]
+}
+names(pt_pred0) <- ctype
+
+## get prediction for Foretinib for d1
+
+fit <- lm(as.matrix(d1.aggr.expr) ~ d1.aggr$perturbation, x=TRUE)
+
+pt_pred1 <- list()
+for (i in 1: length(ctype)){
+  ix <- d1.aggr$perturbation=="Foretinib" & d1.aggr$cell_type==ctype[i]
+  obs_test <- fit$x[ix,]
+  obs_train <- fit$x[!ix,]
+
+  X_test <-as.matrix(d1.aggr.expr[ix,]) 
+  X_train <- as.matrix(d1.aggr.expr[!ix,])
+
+  fit.x <- lm.fit(obs_train,X_train)
+  pred_ct <- obs_test%*%fit.x$coefficients
+  names(pred_pt) <- names(log.exp.d1)
+  pt_pred1[[i]] <- pred_pt[1,]
+}
+names(pt_pred1) <- ctype
+
+## get prediction for Foretinib for d2
+
+fit <- lm(as.matrix(d2.aggr.expr) ~ d2.aggr$perturbation, x=TRUE)
+
+pt_pred2 <- list()
+for (i in 1: length(ctype)){
+  ix <- d2.aggr$perturbation=="Foretinib" & d2.aggr$cell_type==ctype[i]
+  obs_test <- fit$x[ix,]
+  obs_train <- fit$x[!ix,]
+
+  X_test <-as.matrix(d2.aggr.expr[ix,]) 
+  X_train <- as.matrix(d2.aggr.expr[!ix,])
+
+  fit.x <- lm.fit(obs_train,X_train)
+  pred_pt <- obs_test%*%fit.x$coefficients
+  names(pred_pt) <- names(log.exp.d2)
+  pt_pred2[[i]] <- pred_pt[1,]
+}
+names(pt_pred2) <- ctype
+```
+
+```{r}
+## Two-factor model
+## get prediction for Foretinib for d0
+
+fit <- lm(as.matrix(d0.aggr.expr) ~ d0.aggr$cell_type + d0.aggr$perturbation, x=TRUE)
+
+tf_pred0 <- list()
+for (i in 1: length(ctype)){
+  ix <- d0.aggr$perturbation=="Foretinib" & d0.aggr$cell_type==ctype[i]
+  obs_test <- fit$x[ix,]
+  obs_train <- fit$x[!ix,]
+
+  X_test <-as.matrix(d0.aggr.expr[ix,]) 
+  X_train <- as.matrix(d0.aggr.expr[!ix,])
+
+  fit.x <- lm.fit(obs_train,X_train)
+  pred_tf <- obs_test%*%fit.x$coefficients
+  names(pred_tf) <- names(log.exp.d0)
+  tf_pred0[[i]] <- pred_tf[1,]
+}
+names(tf_pred0) <- ctype
+
+## get prediction for Foretinib for d1
+
+fit <- lm(as.matrix(d1.aggr.expr) ~ d1.aggr$cell_type + d1.aggr$perturbation, x=TRUE)
+
+tf_pred1 <- list()
+for (i in 1: length(ctype)){
+  ix <- d1.aggr$perturbation=="Foretinib" & d1.aggr$cell_type==ctype[i]
+  obs_test <- fit$x[ix,]
+  obs_train <- fit$x[!ix,]
+
+  X_test <-as.matrix(d1.aggr.expr[ix,]) 
+  X_train <- as.matrix(d1.aggr.expr[!ix,])
+
+  fit.x <- lm.fit(obs_train,X_train)
+  pred_tf <- obs_test%*%fit.x$coefficients
+  names(pred_tf) <- names(log.exp.d1)
+  tf_pred1[[i]] <- pred_tf[1,]
+}
+names(tf_pred1) <- ctype
+
+## get prediction for Foretinib for d2
+
+fit <- lm(as.matrix(d2.aggr.expr) ~ d2.aggr$cell_type + d2.aggr$perturbation, x=TRUE)
+
+tf_pred2 <- list()
+for (i in 1: length(ctype)){
+  ix <- d2.aggr$perturbation=="Foretinib" & d2.aggr$cell_type==ctype[i]
+  obs_test <- fit$x[ix,]
+  obs_train <- fit$x[!ix,]
+
+  X_test <-as.matrix(d2.aggr.expr[ix,]) 
+  X_train <- as.matrix(d2.aggr.expr[!ix,])
+
+  fit.x <- lm.fit(obs_train,X_train)
+  pred_tf <- obs_test%*%fit.x$coefficients
+  names(pred_tf) <- names(log.exp.d2)
+  tf_pred2[[i]] <- pred_tf[1,]
+}
+names(tf_pred2) <- ctype
+```
+
+```{r}
+source("sia/SI-A.R")
+```
+
+```{r}
+library(ggplot2)
+obs <- list()
+for (i in 1:length(unique(d0.aggr$cell_type))){
+  obs[[i]] <- d0.aggr.expr[d0.aggr$perturbation=="Foretinib" & d0.aggr$cell_type==ctype[i],]
+}
+genes <- names(log.exp.d0)
+R2_ct <- c()
+for (i in 1: length(ctype)){
+  observation <- as.numeric(obs[[i]])
+  prediction <- as.numeric(ct_pred0[[i]])
+  dt <- data.frame(genes,observation,prediction)
+  names(dt) <- c("genes", "observation", "prediction")
+  R2_ct[i] <- round(cor(as.numeric(obs[[i]]),as.numeric(ct_pred0[[i]]))^2,2)
+  
+ p <- ggplot(dt, aes(x=observation, y=prediction)) + 
+ geom_point(shape=2,alpha=0.8, color="blue")+
+  geom_smooth(method=lm, na.rm = TRUE,colour="black")+
+  xlab("observation") + ylab("Prediction")+ ggtitle(ctype[[i]])+
+  labs(tag = paste0("R2=",R2_ct[i]))+ theme(plot.tag.position = "topright")
+  print(p)
+}
+
+
+```
+
+```{r}
+obs <- list()
+for (i in 1:length(unique(d1.aggr$cell_type))){
+  obs[[i]] <- d1.aggr.expr[d1.aggr$perturbation=="Foretinib" & d1.aggr$cell_type==ctype[i],]
+}
+genes <- names(log.exp.d1)
+R2_ct <- c()
+for (i in 1: length(ctype)){
+  observation <- as.numeric(obs[[i]])
+  prediction <- as.numeric(ct_pred1[[i]])
+  dt <- data.frame(genes,observation,prediction)
+  names(dt) <- c("genes", "observation", "prediction")
+  R2_ct[i] <- round(cor(as.numeric(obs[[i]]),as.numeric(ct_pred1[[i]]))^2,2)
+  
+ p <- ggplot(dt, aes(x=observation, y=prediction)) + 
+ geom_point(shape=2,alpha=0.8, color="blue")+
+  geom_smooth(method=lm, na.rm = TRUE,colour="black")+
+  xlab("observation") + ylab("Prediction")+ ggtitle(ctype[[i]])+
+  labs(tag = paste0("R2=",R2_ct[i]))+ theme(plot.tag.position = "topright")
+  print(p)
+}
+```
+
+```{r}
+obs <- list()
+for (i in 1:length(unique(d2.aggr$cell_type))){
+  obs[[i]] <- d2.aggr.expr[d2.aggr$perturbation=="Foretinib" & d2.aggr$cell_type==ctype[i],]
+}
+genes <- names(log.exp.d2)
+R2_ct <- c()
+for (i in 1: length(ctype)){
+  observation <- as.numeric(obs[[i]])
+  prediction <- as.numeric(ct_pred2[[i]])
+  dt <- data.frame(genes,observation,prediction)
+  names(dt) <- c("genes", "observation", "prediction")
+  R2_ct[i] <- round(cor(as.numeric(obs[[i]]),as.numeric(ct_pred2[[i]]))^2,2)
+  
+ p <- ggplot(dt, aes(x=observation, y=prediction)) + 
+ geom_point(shape=2,alpha=0.8, color="blue")+
+  geom_smooth(method=lm, na.rm = TRUE,colour="black")+
+  xlab("observation") + ylab("Prediction")+ ggtitle(ctype[[i]])+
+  labs(tag = paste0("R2=",R2_ct[i]))+ theme(plot.tag.position = "topright")
+  print(p)
+}
+```
+
+```{r}
+obs <- list()
+for (i in 1:length(unique(d0.aggr$cell_type))){
+  obs[[i]] <- d0.aggr.expr[d0.aggr$perturbation=="Foretinib" & d0.aggr$cell_type==ctype[i],]
+}
+genes <- names(log.exp.d0)
+R2_pt <- c()
+for (i in 1: length(ctype)){
+  observation <- as.numeric(obs[[i]])
+  prediction <- as.numeric(pt_pred0[[i]])
+  dt <- data.frame(genes,observation,prediction)
+  names(dt) <- c("genes", "observation", "prediction")
+  R2_pt[i] <- round(cor(as.numeric(obs[[i]]),as.numeric(pt_pred0[[i]]))^2,2)
+  
+ p <- ggplot(dt, aes(x=observation, y=prediction)) + 
+ geom_point(shape=2,alpha=0.8, color="blue")+
+  geom_smooth(method=lm, na.rm = TRUE,colour="black")+
+  xlab("observation") + ylab("Prediction")+ ggtitle(ctype[[i]])+
+  labs(tag = paste0("R2=",R2_pt[i]))+ theme(plot.tag.position = "topright")
+  print(p)
+}
+
+```
+
+```{r}
+obs <- list()
+for (i in 1:length(unique(d1.aggr$cell_type))){
+  obs[[i]] <- d1.aggr.expr[d1.aggr$perturbation=="Foretinib" & d1.aggr$cell_type==ctype[i],]
+}
+genes <- names(log.exp.d1)
+R2_pt <- c()
+for (i in 1: length(ctype)){
+  observation <- as.numeric(obs[[i]])
+  prediction <- as.numeric(pt_pred1[[i]])
+  dt <- data.frame(genes,observation,prediction)
+  names(dt) <- c("genes", "observation", "prediction")
+  R2_pt[i] <- round(cor(as.numeric(obs[[i]]),as.numeric(pt_pred1[[i]]))^2,2)
+  
+ p <- ggplot(dt, aes(x=observation, y=prediction)) + 
+ geom_point(shape=2,alpha=0.8, color="blue")+
+  geom_smooth(method=lm, na.rm = TRUE,colour="black")+
+  xlab("observation") + ylab("Prediction")+ ggtitle(ctype[[i]])+
+  labs(tag = paste0("R2=",R2_pt[i]))+ theme(plot.tag.position = "topright")
+  print(p)
+}
+```
+
+```{r}
+obs <- list()
+for (i in 1:length(unique(d2.aggr$cell_type))){
+  obs[[i]] <- d2.aggr.expr[d2.aggr$perturbation=="Foretinib" & d2.aggr$cell_type==ctype[i],]
+}
+genes <- names(log.exp.d2)
+R2_pt <- c()
+for (i in 1: length(ctype)){
+  observation <- as.numeric(obs[[i]])
+  prediction <- as.numeric(pt_pred2[[i]])
+  dt <- data.frame(genes,observation,prediction)
+  names(dt) <- c("genes", "observation", "prediction")
+  R2_pt[i] <- round(cor(as.numeric(obs[[i]]),as.numeric(pt_pred2[[i]]))^2,2)
+  
+ p <- ggplot(dt, aes(x=observation, y=prediction)) + 
+ geom_point(shape=2,alpha=0.8, color="blue")+
+  geom_smooth(method=lm, na.rm = TRUE,colour="black")+
+  xlab("observation") + ylab("Prediction")+ ggtitle(ctype[[i]])+
+  labs(tag = paste0("R2=",R2_pt[i]))+ theme(plot.tag.position = "topright")
+  print(p)
+}
+```
+
+```{r}
+obs <- list()
+for (i in 1:length(unique(d0.aggr$cell_type))){
+  obs[[i]] <- d0.aggr.expr[d0.aggr$perturbation=="Foretinib" & d0.aggr$cell_type==ctype[i],]
+}
+genes <- names(log.exp.d0)
+R2_tf <- c()
+for (i in 1: length(ctype)){
+  observation <- as.numeric(obs[[i]])
+  prediction <- as.numeric(tf_pred0[[i]])
+  dt <- data.frame(genes,observation,prediction)
+  names(dt) <- c("genes", "observation", "prediction")
+  R2_tf[i] <- round(cor(as.numeric(obs[[i]]),as.numeric(tf_pred0[[i]]))^2,2)
+  
+ p <- ggplot(dt, aes(x=observation, y=prediction)) + 
+ geom_point(shape=2,alpha=0.8, color="blue")+
+  geom_smooth(method=lm, na.rm = TRUE,colour="black")+
+  xlab("observation") + ylab("Prediction")+ ggtitle(ctype[[i]])+
+  labs(tag = paste0("R2=",R2_tf[i]))+ theme(plot.tag.position = "topright")
+  print(p)
+}
+
+```
+
+```{r}
+obs <- list()
+for (i in 1:length(unique(d1.aggr$cell_type))){
+  obs[[i]] <- d1.aggr.expr[d1.aggr$perturbation=="Foretinib" & d1.aggr$cell_type==ctype[i],]
+}
+genes <- names(log.exp.d1)
+R2_tf <- c()
+for (i in 1: length(ctype)){
+  observation <- as.numeric(obs[[i]])
+  prediction <- as.numeric(tf_pred1[[i]])
+  dt <- data.frame(genes,observation,prediction)
+  names(dt) <- c("genes", "observation", "prediction")
+  R2_tf[i] <- round(cor(as.numeric(obs[[i]]),as.numeric(tf_pred1[[i]]))^2,2)
+  
+ p <- ggplot(dt, aes(x=observation, y=prediction)) + 
+ geom_point(shape=2,alpha=0.8, color="blue")+
+  geom_smooth(method=lm, na.rm = TRUE,colour="black")+
+  xlab("observation") + ylab("Prediction")+ ggtitle(ctype[[i]])+
+  labs(tag = paste0("R2=",R2_tf[i]))+ theme(plot.tag.position = "topright")
+  print(p)
+}
+```
+
+```{r}
+obs <- list()
+for (i in 1:length(unique(d2.aggr$cell_type))){
+  obs[[i]] <- d2.aggr.expr[d2.aggr$perturbation=="Foretinib" & d2.aggr$cell_type==ctype[i],]
+}
+genes <- names(log.exp.d2)
+R2_tf <- c()
+for (i in 1: length(ctype)){
+  observation <- as.numeric(obs[[i]])
+  prediction <- as.numeric(tf_pred2[[i]])
+  dt <- data.frame(genes,observation,prediction)
+  names(dt) <- c("genes", "observation", "prediction")
+  R2_tf[i] <- round(cor(as.numeric(obs[[i]]),as.numeric(tf_pred2[[i]]))^2,2)
+  
+ p <- ggplot(dt, aes(x=observation, y=prediction)) + 
+ geom_point(shape=2,alpha=0.8, color="blue")+
+  geom_smooth(method=lm, na.rm = TRUE,colour="black")+
+  xlab("observation") + ylab("Prediction")+ ggtitle(ctype[[i]])+
+  labs(tag = paste0("R2=",R2_tf[i]))+ theme(plot.tag.position = "topright")
+  print(p)
+}
+```
+
+### DEG analysis
+
+```{r}
+### DEG NK cell type Trametinib vs DMSO
+DEG_obs_dmso <- data.frame(t(d0.aggr.expr[d0.aggr$cell_type=="NK cells" & d0.aggr$perturbation=="DMSO",]),t(d1.aggr.expr[d1.aggr$cell_type=="NK cells" & d1.aggr$perturbation=="DMSO",]),t(d2.aggr.expr[d2.aggr$cell_type=="NK cells" & d2.aggr$perturbation=="DMSO",]))
+
+DEG_obs_dmso_full <- data.frame(t(d0.data[d0.data$cell_type=="NK cells" & d0.data$perturbation=="DMSO",]),t(d1.data[d1.data$cell_type=="NK cells" & d1.data$perturbation=="DMSO",]),t(d2.data[d2.data$cell_type=="NK cells" & d2.data$perturbation=="DMSO",]))
+
+DEG_obs_dmso_expr <- DEG_obs_dmso_full[-(1:5),]
+
+#names(DEG_obs_dmso) <- c("donor1", "donor2","donor3")
+
+#################
+
+DEG_obs_For <- data.frame(t(d0.data[d0.data$cell_type=="NK cells" & d0.data$perturbation=="Foretinib",]),t(d1.data[d1.data$cell_type=="NK cells" & d1.data$perturbation=="Foretinib",]),t(d2.data[d2.data$cell_type=="NK cells" & d2.data$perturbation=="Foretinib",]))
+
+#names(DEG_obs_tra) <- c("donor1", "donor2","donor3")
+
+##################
+
+DEG_obs_ct <- data.frame(ct_pred0[[1]],ct_pred1[[1]],ct_pred2[[1]])
+
+#names(DEG_obs_ct) <- c("donor1", "donor2","donor3")
+
+###################
+
+DEG_obs_pt <- data.frame(pt_pred0[[1]],pt_pred1[[1]],pt_pred2[[1]])
+
+names(DEG_obs_pt) <- c("donor1", "donor2","donor3")
+
+###################
+
+DEG_obs_tf <- data.frame(tf_pred0[[1]],tf_pred1[[1]],tf_pred2[[1]])
+
+#names(DEG_obs_tf) <- c("donor1", "donor2","donor3")
+```
+
+```{r}
+
+temp <- data.frame(cbind(DEG_obs_dmso_full,DEG_obs_For))
+counts <- data.frame(sapply(temp[-(1:5),],as.numeric))
+rownames(counts) <- rownames(temp[-(1:5),])
+group <- as.factor(t(temp[2,]))
+plate <- as.factor(t(temp[3,]))
+library_id <- as.factor(t(temp[4,]))
+donor <- as.factor(t(temp[5,]))
+design <- model.matrix(~group+plate+library_id+donor)
+fit <- lmFit(counts,design)
+fit1 <- eBayes(fit)
+top.table.ob <- topTable(fit1,coef = "groupForetinib",sort.by = "logFC", n = Inf)
+deg_ob <- rownames(top.table.ob)[top.table.ob$logFC>=0.3 & top.table.ob$adj.P.Val<0.05]
+
+library(EnhancedVolcano)
+
+v <- EnhancedVolcano(top.table.ob,
+       lab = rownames(counts),
+       title = "NK",
+       x = 'logFC',
+       y = 'adj.P.Val',
+       pCutoff=0.05,
+       FCcutoff = 0.5)
+print(v)
+
+################################
+temp2 <- data.frame(cbind(DEG_obs_dmso_expr,DEG_obs_ct))
+counts <- data.frame(sapply(temp2,as.numeric))
+rownames(counts) <- rownames(temp[-(1:5),])
+group <- as.factor(t(temp[2,]))
+plate <- as.factor(t(temp[3,]))
+library_id <- as.factor(t(temp[4,]))
+donor <- as.factor(t(temp[5,]))
+design <- model.matrix(~group+plate+library_id+donor)
+fit <- lmFit(counts,design)
+fit1 <- eBayes(fit)
+top.table.ct <- topTable(fit1,coef = "groupForetinib",sort.by = "logFC", n = Inf)
+
+deg_ct <- rownames(top.table.ct)[top.table.ct$logFC>=0.3 & top.table.ct$adj.P.Val<0.05]
+
+
+v <- EnhancedVolcano(top.table.ct,
+       lab = rownames(counts),
+       title = "NK",
+       x = 'logFC',
+       y = 'adj.P.Val',
+       pCutoff=0.05,
+       FCcutoff = 0.5)
+print(v)
+
+###################################
+
+temp3 <- data.frame(cbind(DEG_obs_dmso_expr,DEG_obs_tf))
+counts <- data.frame(sapply(temp3,as.numeric))
+rownames(counts) <- rownames(temp[-(1:5),])
+group <- as.factor(t(temp[2,]))
+plate <- as.factor(t(temp[3,]))
+library_id <- as.factor(t(temp[4,]))
+donor <- as.factor(t(temp[5,]))
+design <- model.matrix(~group+plate+library_id)
+fit <- lmFit(counts,design)
+fit1 <- eBayes(fit)
+top.table.tf <- topTable(fit1,coef = "groupForetinib",sort.by = "logFC", n = Inf)
+
+v <- EnhancedVolcano(top.table.tf,
+       lab = rownames(counts),
+       title = "NK",
+       x = 'logFC',
+       y = 'adj.P.Val',
+       pCutoff=0.05,
+       FCcutoff = 0.5)
+print(v)
+
+deg_tf <- rownames(top.table.tf)[top.table.tf$logFC>=0.3 & top.table.tf$adj.P.Val<0.05]
+
+
+temp4 <- data.frame(cbind(DEG_obs_dmso_expr,DEG_obs_pt))
+counts <- data.frame(sapply(temp4,as.numeric))
+rownames(counts) <- rownames(temp[-(1:5),])
+group <- as.factor(t(temp[2,]))
+plate <- as.factor(t(temp[3,]))
+library_id <- as.factor(t(temp[4,]))
+donor <- as.factor(t(temp[5,]))
+design <- model.matrix(~group+plate+library_id)
+fit <- lmFit(counts,design)
+fit1 <- eBayes(fit)
+top.table.pt <- topTable(fit1,coef = "groupForetinib",sort.by = "logFC", n = Inf)
+
+deg_pt <- rownames(top.table.pt)[top.table.pt$logFC>=0.3 & top.table.pt$adj.P.Val<0.05]
+
+
+v <- EnhancedVolcano(top.table.pt,
+       lab = rownames(counts),
+       title = "NK",
+       x = 'logFC',
+       y = 'adj.P.Val',
+       pCutoff=0.05,
+       FCcutoff = 0.5)
+print(v)
 ```
