@@ -839,8 +839,9 @@ design <- model.matrix(~group+plate+library_id+donor)
 fit <- lmFit(counts,design)
 fit1 <- eBayes(fit)
 top.table.ob <- topTable(fit1,coef = "groupForetinib",sort.by = "logFC", n = Inf)
-deg_ob <- rownames(top.table.ob)[top.table.ob$logFC>=0.3 & top.table.ob$adj.P.Val<0.05]
-
+deg_ob <- rownames(top.table.ob)[top.table.ob$logFC>=1 & top.table.ob$adj.P.Val<0.05]
+```
+```{r, fig.height=5}
 library(EnhancedVolcano)
 
 v <- EnhancedVolcano(top.table.ob,
@@ -849,9 +850,11 @@ v <- EnhancedVolcano(top.table.ob,
        x = 'logFC',
        y = 'adj.P.Val',
        pCutoff=0.05,
-       FCcutoff = 0.5)
+       FCcutoff = 0.5,
+       ylim = c(0,3))
 print(v)
-
+```
+```{r}
 ################################
 temp2 <- data.frame(cbind(DEG_obs_dmso_expr,DEG_obs_ct))
 counts <- data.frame(sapply(temp2,as.numeric))
@@ -900,7 +903,7 @@ v <- EnhancedVolcano(top.table.tf,
        FCcutoff = 0.5)
 print(v)
 
-deg_tf <- rownames(top.table.tf)[top.table.tf$logFC>=0.3 & top.table.tf$adj.P.Val<0.05]
+deg_tf <- rownames(top.table.tf)[top.table.tf$logFC>=1 & top.table.tf$adj.P.Val<0.05]
 
 
 temp4 <- data.frame(cbind(DEG_obs_dmso_expr,DEG_obs_pt))
@@ -915,7 +918,7 @@ fit <- lmFit(counts,design)
 fit1 <- eBayes(fit)
 top.table.pt <- topTable(fit1,coef = "groupForetinib",sort.by = "logFC", n = Inf)
 
-deg_pt <- rownames(top.table.pt)[top.table.pt$logFC>=0.3 & top.table.pt$adj.P.Val<0.05]
+deg_pt <- rownames(top.table.pt)[top.table.pt$logFC>=1 & top.table.pt$adj.P.Val<0.05]
 
 
 v <- EnhancedVolcano(top.table.pt,
