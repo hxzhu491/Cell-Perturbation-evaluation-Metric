@@ -184,6 +184,7 @@ names(ct_pred) <- names(kang_ctr)
 fit <- lm(as.matrix(kang_X) ~ kang_obs$cell_type+kang_obs$condition, x=TRUE)
 
 tf_pred <- list()
+pval_tf <- list()
 for (i in 1: length(ctype)){
   ix <- kang_obs$condition=="stimulated" & kang_obs$cell_type==ctype[i]
   obs_test <- fit$x[ix,]
@@ -196,9 +197,30 @@ for (i in 1: length(ctype)){
   pred_tf <- obs_test%*%fit.x$coefficients
   names(pred_tf) <- genes
   tf_pred[[i]] <- pred_tf[1,]
+  ### get p-values
+  rss <- c()
+  for (j in 1:ncol(fit.x$residuals)){
+    rss[j] <- sum(fit.x$residuals[,j]^2)
+  }
+  rdf <- nrow(X_train)-ncol(obs_train)
+  resvar <- rss/rdf
+  R <- chol2inv(fit.x$qr$qr)
+  se <- list()
+  for (j in 1: ncol(fit.x$residuals)){
+    se[[j]] <- sqrt(diag(R)*resvar[j])
+  }
+  pval <- c()
+  for (j in 1: ncol(fit.x$residuals)){
+    pval[j] <- 2*pt(abs(fit.x$coefficients[,j]/se[[j]]),rdf,lower.tail = FALSE)[8]
+  } 
+  pval_tf[[i]] <- pval
 }
 
 names(tf_pred) <- names(kang_ctr)
+
+### p-value calculation
+
+
 ```
 
 ## Compute R2 For every cell type using 3 methods
@@ -376,6 +398,36 @@ for (id in 1: length(DEG_genes_obs[[3]])){
 }
 ```
 
+### CD14 DE genes
+
+```{r}
+for (id in 1: length(DEG_genes_obs[[6]])){
+  test_scgen <- scgen_pred[[6]][,genes==DEG_genes_obs[[6]][id]]
+  test_ctr <- kang_ctr[[6]][,genes==DEG_genes_obs[[6]][id]]
+  test_sti <- kang_sti[[6]][,genes==DEG_genes_obs[[6]][id]]
+  test_ct <- ct_dist[[6]][,genes==DEG_genes_obs[[6]][id]]
+  test_tf <- tf_dist[[6]][,genes==DEG_genes_obs[[6]][id]]
+
+  method1 <- rep("control",length(test_ctr))
+  method2 <- rep("stimulated", length(test_sti))
+  method3 <- rep("two-factor", length(test_tf))
+  method4 <- rep("scgen", length(test_scgen))
+  method5 <- rep("cell type", length(test_ct))
+  method <- c(method1,method2,method3,method4,method5)
+  res <- c(test_ctr,test_sti,test_tf,test_scgen,test_ct)
+  d <- data.frame(res,method)
+  names(d) <- c("R2", "method")
+
+  level_order <- c("control","stimulated","cell type","two-factor","scgen")
+  p <- ggplot(d, aes(x=factor(method,level=level_order), y=R2, fill=method)) + 
+    geom_violin() +geom_boxplot(width=0.1) +
+    labs(x="Condition",
+         y=paste0("expression for ",DEG_genes_obs[[6]][id]))
+  print(p)
+}
+```
+
+
 ## Volcano Plots
 
 ### Volcano Plots on Observed Data
@@ -386,6 +438,7 @@ library(EnhancedVolcano)
 for (i in 1: length(ctype)){
   v <- EnhancedVolcano(tables[[i]],
        lab = keeps[[i]],
+       title = ctype[i],
        x = 'logFC',
        y = 'adj.P.Val',
        pCutoff=1e-10,
@@ -426,12 +479,26 @@ names(DEG_tf) <- names(kang_ctr)
 names(tables_tf) <- names(kang_ctr)
 names(keeps_tf) <- names(kang_ctr)
 
+pval_tf_keep <- list()
+for (i in 1:length(ctype)){
+  pval_tf_keep[[i]] <- data.frame(pval_tf[[i]][rownames(counts) %in% keeps_tf[[i]]],keeps_tf[[i]])
+  names(pval_tf_keep[[i]]) <- c("pval", "gene")
+  rownames(pval_tf_keep[[i]]) <- keeps_tf[[i]]
+}
+
+tables_tf_new <- list()
+for (i in 1: length(ctype)){
+  tables_tf_new[[i]] <- merge(tables_tf[[i]],pval_tf_keep[[i]],by=0)
+  DEG_tf[[i]] <- merge(DEG_tf[[i]],pval_tf_keep[[i]],by="gene")
+}
+
+
 p_lvl <- 0.00001
 lfc <- 0.3
 
 DEG_genes_tf <- list()
 for (i in 1: length(ctype)){
-  temp <- DEG_tf[[i]]$gene[DEG_tf[[i]]$adj.P.val<p_lvl & abs(DEG_tf[[i]]$logfc)>lfc]
+  temp <- DEG_tf[[i]]$gene[DEG_tf[[i]]$pval<p_lvl & abs(DEG_tf[[i]]$logfc)>lfc]
   DEG_genes_tf[[i]] <- temp
 }
 names(DEG_genes_tf) <- names(kang_ctr)
@@ -441,14 +508,15 @@ names(DEG_genes_tf) <- names(kang_ctr)
 
 ```{r, fig.height=5}
 for (i in 1: length(ctype)){
-  v <- EnhancedVolcano(tables_tf[[i]],
+  v <- EnhancedVolcano(tables_tf_new[[i]],
        lab = keeps_tf[[i]],
        x = 'logFC',
-       y = 'adj.P.Val',
-       pCutoff=1e-10,
+       y = 'pval',
+       pCutoff=1e-5,
        FCcutoff = 0.3)
   print(v)
 }
+
 ```
 
 #### DEG scgen prediction
@@ -765,5 +833,11 @@ for (i in 1: length(ctype)){
 }
 ```
 
+```{r}
+intersect_all <- function(a,b,...){
+  Reduce(intersect, list(a,b,...))
+}
 
+intersect_all(DEG_genes_obs[[1]],DEG_genes_obs[[2]],DEG_genes_obs[[3]],DEG_genes_obs[[4]],DEG_genes_obs[[5]],DEG_genes_obs[[6]],DEG_genes_obs[[7]])
+```
 
