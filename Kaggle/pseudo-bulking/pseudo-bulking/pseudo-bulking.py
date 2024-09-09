@@ -161,3 +161,4 @@ sorted_index = bulk_adata.obs.sort_values(['plate_name', 'sm_name', 'cell_type']
 bulk_adata = bulk_adata[sorted_index].copy()
 
 fixed_bulk_adata
+

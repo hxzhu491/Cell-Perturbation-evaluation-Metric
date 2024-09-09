@@ -138,7 +138,7 @@ names(DEG_genes_obs) <- names(kang_ctr)
 ### Get scGen Predictions
 
 ```{r}
-paths <- c("results/pred_NK.csv","results/pred_Dendritic.csv","results/pred_CD4T.csv","results/pred_B.csv","results/pred_FCGR3A.csv","results/pred_CD14.csv","results/pred_CD8T.csv")
+paths <- c("result/pred_NK.csv","result/pred_Dendritic.csv","result/pred_CD4T.csv","result/pred_B.csv","result/pred_FCGR3A.csv","result/pred_CD14.csv","result/pred_CD8T.csv")
 scgen_pred <- list()
 for (i in 1: length(ctype)){
   temp <- read.csv(paths[i])
