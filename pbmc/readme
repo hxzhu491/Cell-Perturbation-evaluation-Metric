@@ -1,8 +1,8 @@
 ## In this folder, we test the new evaluation approach on pbmc data from Kang et al. 2018
 ## The python files are used to output csv data from h5ad, and to run scgen on the dataset.
 ## The rmd file is the main R code for generating plots and results.
-## Currently, the outputs from data_output.ipynb are stored in the data folder.
-## The outputs from pbmc_scgen.ipynb are stored in the result folder.
+## Currently, the outputs from data_output.ipynb are stored in the data folder (google link).
+## The outputs from pbmc_scgen.ipynb are stored in the result folder (google link).
 ## To run the pbmc_final_revised.Rmd, need to: 
 ## 1. Download files from the link in the data folder
 ## 2. Download files from the link in the result folder
