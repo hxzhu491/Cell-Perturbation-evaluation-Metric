@@ -1,9 +1,12 @@
-## In this folder, we test the new evaluation approach on pbmc data from Kang et al. 2018
-## The python files are used to output csv data from h5ad, and to run scgen on the dataset.
-## The rmd file is the main R code for generating plots and results.
-## Currently, the outputs from data_output.ipynb are stored in the data folder (google link).
-## The outputs from pbmc_scgen.ipynb are stored in the result folder (google link).
-## To run the pbmc_final_revised.Rmd, need to: 
-## 1. Download files from the link in the data folder
-## 2. Download files from the link in the result folder
-## Currently the two ipynb files are not necessary to run again.
+## Perform DEG analysis with in silico models on Kang et. al 2018 data set.
+## In Silico Models Used: scgen and baseline models
+## Kang data is obtained from scgen
+## Kang url:
+## scgen url:
+
+
+1. Run scgen: To reproduce scgen results, run pbmc_scgen.ipynb. This will download h5ad files from  For users not interested in rerunning scgen, results may be downloaded following link in results/ folder 
+
+2. Download and convert Kang data sets to csv: Baseline models and comparison of models are performed in R using .csv files as input. Kang .h5ad files (NAME the files) must be downloaded (from WHERE?), converted into .csv
+
+3. pbmc_final_revised.Rmd: Fit baseline models (uses .csv in data/) and perform differential gene expression analysis using both baseline models and scgen (scgen results read from results folder)
