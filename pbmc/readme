@@ -1,12 +1,37 @@
-## Perform DEG analysis with in silico models on Kang et. al 2018 data set.
-## In Silico Models Used: scgen and baseline models
-## Kang data is obtained from scgen
-## Kang url:
-## scgen url:
+Perform both in vitro and in silico DEG analysis on Kang et. al 2018 data set. We use the processed data (processed by Lotfollahi et. al 2019 scgen paper). The original processed data is  formatted as h5ad file as "Kang.h5ad".
+
+In Silico models used: scgen (Lotfollahi et. al 2019) and baseline models (cellular model and two-factor model).
+
+The datasets that stored in the data folder could be downloaded through url: "https://drive.google.com/drive/folders/1Yz99V70Hsuq_NFQqZPlduLzKbOyJxLBq". "Kang.h5ad" is the h5ad file that used in "data_output.ipynb" to generate the csv files. "Kang_obs.csv", "Kang_var.csv" and "Kang_X.csv" are data files used in the Rmd analysis code. 
+
+The scgen_reuslt folder stores result files generated from "pbmc_scgen.ipynb". To run the Rmd analysis code, need to download "pred_[cell type].csv" file which are the prediction results from scgen for each cell type. The download url is "https://drive.google.com/drive/folders/1GqfJLJYdv9crd5NsOKt0Z_3n2SgvQkox". 
+
+The "pbmc_scgen.ipynb" is used to run scgen on "Kang.h5ad" and generate scgen prediction results.
+
+The "pbmc_final_revised.Rmd" is the main analysis code. This analysis includes in vitro DEG results under each cell type, benchmark model fitting (cellular model and two-factor model), evaluation with R^2, in silico DEG analysis (using benchmark prediction results and scgen results), evaluation with PR-AUC, and more plots.
+
+###########################################
+
+Instructions to perform the analysis:
+
+For users want to skip running scgen:
+
+1. Download Kang csv files from "https://drive.google.com/drive/folders/1Yz99V70Hsuq_NFQqZPlduLzKbOyJxLBq", store the 3 csv files in data folder.
+
+2. Download "pred_[cell type].csv" from "https://drive.google.com/drive/folders/1GqfJLJYdv9crd5NsOKt0Z_3n2SgvQkox", store the 7 files in scgen_result folder.
+
+3. Run "pbmc_final_revised.Rmd", generate analysis results.
+
+############################################
+
+For users want to run the complete analysis including running scgen:
+
+1. Download Kang.h5ad file from "https://drive.google.com/drive/folders/1Yz99V70Hsuq_NFQqZPlduLzKbOyJxLBq", store the file in data folder.
+
+2. Run "data_output.ipynb", this will generate Kang csv files.
+
+3. Run "pbmc_scgen.ipynb", this will generate scgen predictions for each cell type. Additionally, this file also generates DEG results which conducted by scanpy. However these results are only for reference, they are not used in further analysis. Note, it is recommended to run this notebook in Google Collab. The package "scgen" may not successfully imported on local (Mac) machine. If run this file on Google collar, please download the "pred_[cell type].csv" files manually from the google collab output and store them in scgen_result folder.
+
+4. Run "pbmc_final_revised.Rmd", generate analysis results.
 
 
-1. Run scgen: To reproduce scgen results, run pbmc_scgen.ipynb. This will download h5ad files from  For users not interested in rerunning scgen, results may be downloaded following link in results/ folder 
-
-2. Download and convert Kang data sets to csv: Baseline models and comparison of models are performed in R using .csv files as input. Kang .h5ad files (NAME the files) must be downloaded (from WHERE?), converted into .csv
-
-3. pbmc_final_revised.Rmd: Fit baseline models (uses .csv in data/) and perform differential gene expression analysis using both baseline models and scgen (scgen results read from results folder)
