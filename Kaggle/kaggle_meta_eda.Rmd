@@ -52,6 +52,29 @@ library(cmapR)
 library(edgeR)
 library(arrow)
 ```
+
+```{r}
+if (!requireNamespace("remotes", quietly = TRUE)) {
+  install.packages("remotes")
+}
+remotes::install_github("mojaveazure/seurat-disk")
+```
+
+```{r}
+library(Seurat)
+library(SeuratDisk)
+```
+
+```{r}
+reticulate::install_miniconda()
+anndata::install_anndata()
+```
+
+```{r}
+library(anndata)
+anndata::read_h5ad("bulk_adata.h5ad")
+```
+
 ## Load metadata
 
 ```{r}
@@ -92,9 +115,30 @@ compounds_df = data.frame(adata_obs_meta[,-(1:9)])
 adata_train <- read_parquet("datasets/adata_train.parquet")
 ```
 
+```{r}
+library("anndata")
+```
 
+```{r}
+bulk_adata_obs <- read.csv("datasets/bulk_adata_obs.csv")
+bulk_adata_var <- read.csv("datasets/bulk_adata_var.csv")
+bulk_adata_X <- read.csv("datasets/bulk_adata_X.csv", header = TRUE)
+bulk_adata_X <- bulk_adata_X[,-1]
+gene_name <- rownames(bulk_adata_var)
+```
 
+```{r}
+load(file="datasets/bulk_counts.Rda")
+length(unique(bulk_counts$gene))
+length(bulk_counts$bulk_id)
+train_meta <- read.csv("datasets/adata_obs_meta.csv")
+```
 
+```{r}
+library(tidyr)
+bc_data <- bulk_counts %>% pivot_wider(names_from = gene, values_from = count)
+bc_data[is.na(bc_data)] <- 0
+```
 
 
 

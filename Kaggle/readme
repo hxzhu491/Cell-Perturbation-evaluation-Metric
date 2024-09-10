@@ -2,3 +2,7 @@
 ## 8/26/2024
 ## Current progress: DEG analysis on observations and benchmark models
 ## Todo: apply si-a and get DEG results using si-a prediction
+################################
+## Instruction for the Kaggle analysis:
+## In folder pseudo-bulking, run the python code pseudo-bulking.ipynb, this will generate the bulked count data (bulk_adata.h5ad). It will also generate bash code to run limma to get the de results. The necessary R script files are limma_fit.R and limma_contrast.R in the same folder.
+## Before running any codes, please download datasets in the datasets folder. Note that, the bulk_counts.Rda is pseudo-bulked data generated from Amir's code.
