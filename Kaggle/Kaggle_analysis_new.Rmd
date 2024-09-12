@@ -1,0 +1,244 @@
+---
+title: "Kaggle_bulked_eda"
+author: "Hongxu Zhu"
+always_allow_html: yes
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    theme: united
+    toc: yes
+    toc_collapsed: yes
+    toc_float: yes
+---
+
+```{r alternative-preambles,echo=FALSE,include=FALSE,eval=FALSE}
+## if using word replace output with
+output:
+  word_document:
+    toc: yes
+
+## if using pdf replace output with
+output:
+  pdf_document:
+    toc: yes
+header-includes:
+  - \usepackage{xcolor}
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+## colorizes text when using html or pdf output
+## just spits out text x for word
+colorize <- function(x, color) {
+  if(color=="todo"){
+    color <- "red"
+    x <- paste0("TODO: ",x)
+  }
+  if (knitr::is_latex_output()) {
+    sprintf("\\textcolor{%s}{%s}", color, x)
+  } else if (knitr::is_html_output()) {
+    sprintf("<span style='color: %s;'>%s</span>", color, 
+      x)
+  } else x
+}
+
+todo <- function(x){
+  paste0("**",colorize(x,"todo"),"**")
+}
+
+library(kableExtra)
+library(cmapR)
+library(edgeR)
+library(arrow)
+```
+
+## Input bulked data
+
+```{r}
+bulk_adata_obs <- read.csv("datasets/bulk_adata_obs.csv")
+bulk_adata_var <- read.csv("datasets/bulk_adata_var.csv")
+bulk_adata_X <- read.csv("datasets/bulk_adata_X.csv", header = TRUE)
+bulk_adata_X <- bulk_adata_X[,-1]
+gene_name <- rownames(bulk_adata_var)
+```
+
+
+## Input reference file
+
+```{r}
+de_train <- read_parquet("datasets/de_train.parquet")
+```
+
+## Input Computed DEG results, Compute score and compare to reference file
+
+```{r}
+library(tidyverse)
+library(gtools)
+library(ggplot2)
+c_type <- c("B", "Myeloid","NK","T4","T8","Treg")
+paths <- c("pseudo-bulking/pseudo-bulking/cell_type_B","pseudo-bulking/pseudo-bulking/cell_type_Myeloid", "pseudo-bulking/pseudo-bulking/cell_type_NK","pseudo-bulking/pseudo-bulking/cell_type_T4","pseudo-bulking/pseudo-bulking/cell_type_T8","pseudo-bulking/pseudo-bulking/cell_type_Treg")
+pattern <- "*.csv"
+
+## Create data frame with p-value
+
+DE_p_value_list <- list()
+for (i in 1: length(paths)){
+  path <- paths[i]
+  file_list <- mixedsort(list.files(path, pattern, full.names = TRUE))
+  temp <- lapply(file_list, read.csv)
+  DE_p_value <- data.frame()
+  for (j in 1: length(temp)){
+    DE_p_value <- rbind(DE_p_value,t(temp[[j]]$P.Value))
+  }
+  DE_p_value_list[[i]] <- DE_p_value
+}
+
+DE_p_value_df <- data_frame()
+for (i in 1: length(DE_p_value_list)){
+  DE_p_value_df <- rbind(DE_p_value_df,DE_p_value_list[[i]])
+}
+
+names(DE_p_value_df) <- gene_name
+
+## Create data frame with log fold change
+
+DE_lfc_list <- list()
+for (i in 1: length(paths)){
+  path <- paths[i]
+  file_list <- mixedsort(list.files(path, pattern, full.names = TRUE))
+  temp <- lapply(file_list, read.csv)
+  DE_lfc <- data.frame()
+  for (j in 1: length(temp)){
+    DE_lfc <- rbind(DE_lfc,t(temp[[j]]$logFC))
+  }
+  DE_lfc_list[[i]] <- DE_lfc
+}
+
+DE_lfc_df <- data_frame()
+for (i in 1: length(DE_lfc_list)){
+  DE_lfc_df <- rbind(DE_lfc_df,DE_lfc_list[[i]])
+}
+
+names(DE_lfc_df) <- gene_name
+
+## meta data for the created data frames
+
+meta_path <- "pseudo-bulking/pseudo-bulking/input_obs"
+meta_file_list <- list.files(meta_path,pattern,full.names = TRUE)
+input_obs <- lapply(meta_file_list, read.csv)
+
+View(input_obs[[1]])
+
+# Note that, for DE result files, pert are labeled as "Rpert[number]" which could be found in the input_obs
+
+Rpert_B <- c(0:4,6:17)
+Rpert_Myeloid <- c(0:4,6:17)
+Rpert_NK <- c(0:26,28:146)
+Rpert_T4 <- c(0:24,26:146)
+Rpert_T8 <- c(0:21,23:142)
+Rpert_Treg <- c(0:26,28:146)
+
+sm_name_B <- c()
+for (i in 1:length(Rpert_B)){
+  sm_name_B[i] <- unique(input_obs[[1]]$sm_name[input_obs[[1]]$Rpert==Rpert_B[i]])
+}
+
+sm_name_Myeloid <- c()
+for (i in 1:length(Rpert_Myeloid)){
+  sm_name_Myeloid[i] <- unique(input_obs[[2]]$sm_name[input_obs[[2]]$Rpert==Rpert_Myeloid[i]])
+}
+
+sm_name_NK <- c()
+for (i in 1:length(Rpert_NK)){
+  sm_name_NK[i] <- unique(input_obs[[3]]$sm_name[input_obs[[3]]$Rpert==Rpert_NK[i]])
+}
+
+sm_name_T4 <- c()
+for (i in 1:length(Rpert_T4)){
+  sm_name_T4[i] <- unique(input_obs[[4]]$sm_name[input_obs[[4]]$Rpert==Rpert_T4[i]])
+}
+
+sm_name_T8 <- c()
+for (i in 1:length(Rpert_T8)){
+  sm_name_T8[i] <- unique(input_obs[[5]]$sm_name[input_obs[[5]]$Rpert==Rpert_T8[i]])
+}
+
+sm_name_Treg <- c()
+for (i in 1:length(Rpert_Treg)){
+  sm_name_Treg[i] <- unique(input_obs[[6]]$sm_name[input_obs[[6]]$Rpert==Rpert_Treg[i]])
+}
+
+### Now we can create pert name for our p-value, logfc data frames
+
+sm_name <- c(sm_name_B,sm_name_Myeloid,sm_name_NK,sm_name_T4,sm_name_T8,sm_name_Treg)
+
+cell_type_name <- unique(de_train$cell_type)
+
+cell_type <- c(rep("B cells",length(sm_name_B)),rep("Myeloid cells",length(sm_name_Myeloid)),rep("NK cells",length(sm_name_NK)),rep("T cells CD4+",length(sm_name_T4)),rep("T cells CD8+",length(sm_name_T8)),rep("T regulatory cells",length(sm_name_Treg)))
+
+## Now add cell type and sm name to DE data frames
+
+DE_p_value_df <- data.frame(cell_type,sm_name,DE_p_value_df)
+DE_lfc_df <- data.frame(cell_type,sm_name,DE_lfc_df)
+
+## compute score
+
+score_df <- -log10(DE_p_value_df[,-(1:2)])*sign(DE_lfc_df[,-(1:2)])
+score_df <- data.frame(cell_type,sm_name,score_df)
+
+## Compare computed score with de_train(ground truth)
+
+## Check all scatter plots
+ct <- "T cells CD4+"
+sn <- sm_name_T4[56:77]
+
+for (i in 1: length(sn)){
+  c1 <- score_df[score_df$cell_type==ct & score_df$sm_name==sn[i],-c(1,2)]
+  c2 <- de_train[de_train$cell_type==ct & de_train$sm_name==sn[i],-(1:5)]
+  computed <- t(data.frame(c1))
+  truth <- t(data.frame(c2))
+  df <- data.frame(computed,truth)
+  names(df) <- c("computed","truth")
+  p <- ggplot(df,aes(x=truth,y=computed))+geom_point(color="blue")
+  print(p)
+}
+
+## We get the same results as the reference file
+```
+
+## Work with pseudo-bulked data
+
+```{r}
+## take necessary variables in meta data
+bulk_meta <- data.frame(bulk_adata_obs$cell_type,bulk_adata_obs$plate_name,bulk_adata_obs$row,bulk_adata_obs$donor_id,bulk_adata_obs$sm_lincs_id, bulk_adata_obs$sm_name)
+
+names(bulk_meta) <- c("cell_type","plate_name","row","donor_id","sm_lincs_id","sm_name")
+
+## merge meta data and expression data
+names(bulk_adata_X) <- gene_name
+bulk_full <- data.frame(bulk_meta,bulk_adata_X)
+
+```
+
+### Overview of full data
+
+```{r}
+library(ComplexHeatmap)
+tab <- table(bulk_meta$cell_type,bulk_meta$sm_lincs_id)
+tab <- 1*(tab>0)
+tab <- tab[,order(colSums(tab),decreasing=TRUE)]
+tab <- tab[order(rowSums(tab),decreasing=FALSE),]
+temp <- matrix(tab,nrow=nrow(tab))
+dimnames(temp) <- dimnames(tab)
+fsize <- 10
+
+pdf("heatmap.pdf",width=20,height=10)
+Heatmap(temp,col=c("white","blue"),cluster_rows=FALSE,cluster_columns=FALSE,row_title="Cell   type",column_title="Perturbation",show_row_names=TRUE,row_names_gp = gpar(fontsize=10),column_names_gp = gpar(fontsize=8), show_heatmap_legend=FALSE, rect_gp = gpar(col="grey"))
+dev.off()
+```
+
+## Fit benchmark models
+
+```{r}
+```
