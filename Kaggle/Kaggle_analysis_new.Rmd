@@ -204,6 +204,55 @@ for (i in 1: length(sn)){
 
 ## We get the same results as the reference file
 ```
+```{r, fig.height=10}
+## Show some volcano plots
+## B cells
+
+B_pval <- DE_p_value[DE_p_value_df$cell_type=="B cells",]
+names(B_pval) <- gene_name
+B_lfc <- DE_lfc[DE_lfc_df$cell_type=="B cells",]
+names(B_lfc) <- gene_name
+
+library(EnhancedVolcano)
+
+for (i in 1: nrow(B_pval)){
+  df_temp <- data.frame(gene_name,t(B_pval[i,]),t(B_lfc[i,]))
+  names(df_temp) <- c("gene_name","P.Val","logFC")
+  v <- EnhancedVolcano(df_temp,
+       lab = gene_name,
+       title = paste0("B cells","__",sm_name_B[i]),
+       x = 'logFC',
+       y = 'P.Val',
+       pCutoff=0.05,
+       FCcutoff = 1,
+       ylim = c(0,max(-log10(df_temp$P.Val))+0.5))
+  print(v)
+}
+```
+
+```{r,fig.height=10}
+## NK cells
+NK_pval <- DE_p_value[DE_p_value_df$cell_type=="NK cells",]
+names(NK_pval) <- gene_name
+NK_lfc <- DE_lfc[DE_lfc_df$cell_type=="NK cells",]
+names(NK_lfc) <- gene_name
+
+library(EnhancedVolcano)
+
+for (i in 15: 36){
+  df_temp <- data.frame(gene_name,t(NK_pval[i,]),t(NK_lfc[i,]))
+  names(df_temp) <- c("gene_name","P.Val","logFC")
+  v <- EnhancedVolcano(df_temp,
+       lab = gene_name,
+       title = paste0("NK cells","__",sm_name_NK[i]),
+       x = 'logFC',
+       y = 'P.Val',
+       pCutoff=0.05,
+       FCcutoff = 1,
+       ylim = c(0,max(-log10(df_temp$P.Val))+0.5))
+  print(v)
+}
+```
 
 ## Work with pseudo-bulked data
 
@@ -218,6 +267,12 @@ bulk_meta$sm_name[bulk_meta$sm_name=="Dimethyl Sulfoxide"] <- "DMSO"
 names(bulk_adata_X) <- gene_name
 bulk_full <- data.frame(bulk_meta,bulk_adata_X)
 
+```
+
+```{r}
+ii=1
+a <- bulk_meta$cell_type==cmb_df$cell_type[ii] & bulk_meta$sm_name==cmb_df$sm_name[ii]
+bulk_meta[a,]
 ```
 
 ### Overview of full data
@@ -354,5 +409,42 @@ write.csv(tf_pred_df, "./Rmd_output/tf_model_pred.csv")
 
 ```
 
+## Fit in silico models
 
+For this pseudo-bulked data set, our plan is to fit in silico models on each cluster. We then use the prediction from in silico models on each cluster to perform the in silico DEG following the same in vitro DEG pipeline.
 
+```{r}
+## check number of samples for each combination
+check <- c()
+for (ii in 1: nrow(cmb_df)){
+  a <- bulk_meta$cell_type==cmb_df$cell_type[ii] & bulk_meta$sm_name==cmb_df$sm_name[ii]
+  check[ii] <- nrow(bulk_meta[a,])
+}
+
+check
+
+## We may remove combinations that less than 3 samples
+
+```
+
+```{r}
+## get filtered dataset
+
+rm_index_list <- list()
+c <- 0
+for (ii in 1: nrow(cmb_df)){
+  a <- bulk_meta$cell_type==cmb_df$cell_type[ii] & bulk_meta$sm_name==cmb_df$sm_name[ii]
+  if (nrow(bulk_meta[a,])<3){
+    c <- c+1
+    rm_index_list[[c]] <- as.numeric(rownames(bulk_meta[a,]))
+  }
+}
+
+rm_index <- c()
+for (ii in 1:length(rm_index_list)){
+  rm_index <- c(rm_index,rm_index_list[[ii]])
+}
+
+bulk_meta_rm <- bulk_meta[-rm_index,]
+
+```
