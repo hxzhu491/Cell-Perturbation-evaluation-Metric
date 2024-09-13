@@ -73,10 +73,9 @@ de_train <- read_parquet("datasets/de_train.parquet")
 ## Input Computed DEG results, Compute score and compare to reference file
 
 ```{r}
-library(tidyverse)
 library(gtools)
 library(ggplot2)
-c_type <- c("B", "Myeloid","NK","T4","T8","Treg")
+c_type <- c("B cells", "Myeloid cells","NK cells","T cells CD4_","T cells CD8+","T regulatory cells")
 paths <- c("pseudo-bulking/pseudo-bulking/cell_type_B","pseudo-bulking/pseudo-bulking/cell_type_Myeloid", "pseudo-bulking/pseudo-bulking/cell_type_NK","pseudo-bulking/pseudo-bulking/cell_type_T4","pseudo-bulking/pseudo-bulking/cell_type_T8","pseudo-bulking/pseudo-bulking/cell_type_Treg")
 pattern <- "*.csv"
 
@@ -94,7 +93,7 @@ for (i in 1: length(paths)){
   DE_p_value_list[[i]] <- DE_p_value
 }
 
-DE_p_value_df <- data_frame()
+DE_p_value_df <- data.frame()
 for (i in 1: length(DE_p_value_list)){
   DE_p_value_df <- rbind(DE_p_value_df,DE_p_value_list[[i]])
 }
@@ -115,7 +114,7 @@ for (i in 1: length(paths)){
   DE_lfc_list[[i]] <- DE_lfc
 }
 
-DE_lfc_df <- data_frame()
+DE_lfc_df <- data.frame()
 for (i in 1: length(DE_lfc_list)){
   DE_lfc_df <- rbind(DE_lfc_df,DE_lfc_list[[i]])
 }
@@ -128,7 +127,6 @@ meta_path <- "pseudo-bulking/pseudo-bulking/input_obs"
 meta_file_list <- list.files(meta_path,pattern,full.names = TRUE)
 input_obs <- lapply(meta_file_list, read.csv)
 
-View(input_obs[[1]])
 
 # Note that, for DE result files, pert are labeled as "Rpert[number]" which could be found in the input_obs
 
@@ -214,6 +212,7 @@ for (i in 1: length(sn)){
 bulk_meta <- data.frame(bulk_adata_obs$cell_type,bulk_adata_obs$plate_name,bulk_adata_obs$row,bulk_adata_obs$donor_id,bulk_adata_obs$sm_lincs_id, bulk_adata_obs$sm_name)
 
 names(bulk_meta) <- c("cell_type","plate_name","row","donor_id","sm_lincs_id","sm_name")
+bulk_meta$sm_name[bulk_meta$sm_name=="Dimethyl Sulfoxide"] <- "DMSO"
 
 ## merge meta data and expression data
 names(bulk_adata_X) <- gene_name
@@ -241,4 +240,119 @@ dev.off()
 ## Fit benchmark models
 
 ```{r}
+source("./models/cell_model.R")
 ```
+
+```{r}
+## Create all possible combinations in the dataset
+cmb <- data.frame(bulk_meta$cell_type,bulk_meta$sm_name)
+cmb_vec <- paste0(bulk_meta$cell_type,"#",bulk_meta$sm_name)
+cmb_uni <- unique(cmb_vec)
+cmb_list <- strsplit(cmb_uni, split = "#")
+
+cmb_cell <- c()
+cmb_pert <- c()
+for (i in 1:length(cmb_list)){
+  cmb_cell[i] <- cmb_list[[i]][1]
+  cmb_pert[i] <- cmb_list[[i]][2]
+}
+
+cmb_df <- data.frame(cmb_cell,cmb_pert)
+names(cmb_df) <- c("cell_type", "sm_name")
+
+## Don't use DMSO as testing set
+
+cmb_df <- cmb_df[-which(cmb_df$sm_name=="DMSO"),]
+```
+
+### Get cell tpye model prediction
+
+```{r}
+fit <- lm(as.matrix(bulk_adata_X) ~ bulk_meta$cell_type, x=TRUE)
+
+ct_pred <- list()
+for (i in 1: nrow(cmb_df)){
+  ix <- cmb_df$cell_type==cmb_df$cell_type[i] & cmb_df$sm_name==cmb_df$sm_name[i]
+  obs_test <- fit$x[ix,]
+  obs_train <- fit$x[!ix,]
+
+  X_test <-as.matrix(bulk_adata_X[ix,]) 
+  X_train <- as.matrix(bulk_adata_X[!ix,])
+
+  fit.x <- lm.fit(obs_train,X_train)
+  pred_ct <- obs_test%*%fit.x$coefficients
+  names(pred_ct) <- gene_name
+  ct_pred[[i]] <- pred_ct[1,]
+}
+
+ct_pred_df <- data.frame()
+for (i in 1:length(ct_pred)){
+  ct_pred_df <- data.frame(rbind(ct_pred_df,as.vector(ct_pred[[i]])))
+} 
+names(ct_pred_df) <- gene_name
+
+write.csv(ct_pred_df, "./Rmd_output/cell_model_pred.csv")
+```
+
+### Get perturbation model prediction
+
+```{r}
+fit <- lm(as.matrix(bulk_adata_X) ~ bulk_meta$sm_name, x=TRUE)
+
+pt_pred <- list()
+for (i in 1: nrow(cmb_df)){
+  ix <- cmb_df$cell_type==cmb_df$cell_type[i] & cmb_df$sm_name==cmb_df$sm_name[i]
+  obs_test <- fit$x[ix,]
+  obs_train <- fit$x[!ix,]
+
+  X_test <-as.matrix(bulk_adata_X[ix,]) 
+  X_train <- as.matrix(bulk_adata_X[!ix,])
+
+  fit.x <- lm.fit(obs_train,X_train)
+  pred_pt <- obs_test%*%fit.x$coefficients
+  names(pred_pt) <- gene_name
+  pt_pred[[i]] <- pred_pt[1,]
+}
+
+pt_pred_df <- data.frame()
+for (i in 1:length(pt_pred)){
+  pt_pred_df <- data.frame(rbind(pt_pred_df,as.vector(pt_pred[[i]])))
+} 
+names(pt_pred_df) <- gene_name
+
+write.csv(pt_pred_df, "./Rmd_output/pert_model_pred.csv")
+```
+
+### Get two-factor model prediction
+
+```{r}
+fit <- lm(as.matrix(bulk_adata_X) ~ bulk_meta$sm_name + bulk_meta$cell_type, x=TRUE)
+
+tf_pred <- list()
+for (i in 1: nrow(cmb_df)){
+  ix <- cmb_df$cell_type==cmb_df$cell_type[i] & cmb_df$sm_name==cmb_df$sm_name[i]
+  obs_test <- fit$x[ix,]
+  obs_train <- fit$x[!ix,]
+
+  X_test <-as.matrix(bulk_adata_X[ix,]) 
+  X_train <- as.matrix(bulk_adata_X[!ix,])
+
+  fit.x <- lm.fit(obs_train,X_train)
+  pred_tf <- obs_test%*%fit.x$coefficients
+  names(pred_tf) <- gene_name
+  tf_pred[[i]] <- pred_pt[1,]
+}
+
+tf_pred_df <- data.frame()
+for (i in 1:length(tf_pred)){
+  tf_pred_df <- data.frame(rbind(tf_pred_df,as.vector(tf_pred[[i]])))
+} 
+names(tf_pred_df) <- gene_name
+
+
+write.csv(tf_pred_df, "./Rmd_output/tf_model_pred.csv")
+
+```
+
+
+
