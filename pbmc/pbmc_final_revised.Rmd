@@ -103,14 +103,10 @@ keeps <- list()
 for (i in 1: length(ctype)){
   temp <- kang_X[kang_obs$cell_type==ctype[i],]
   counts <- t(temp)
-  mycpm <- edgeR::cpm(counts)
-  thresh <- mycpm > 0.5
-  keep <- rowSums(thresh) >= 2
-  counts.keep <- counts[keep,]
-  keeps[[i]] <- rownames(counts.keep)
+  keeps[[i]] <- rownames(counts)
   condition <- kang_obs$condition[kang_obs$cell_type==ctype[i]]
   design <- model.matrix(~condition)
-  fit <- lmFit(counts.keep,design)
+  fit <- lmFit(counts,design)
   fit <- eBayes(fit)
   top.table <- topTable(fit,sort.by = "logFC", n = Inf)
   tables[[i]] <- top.table
@@ -460,14 +456,10 @@ keeps_tf <- list()
 for (i in 1: length(ctype)){
   temp <- data.frame(rbind(kang_ctr[[i]],tf_dist[[i]]))
   counts <- t(temp)
-  mycpm <- edgeR::cpm(counts)
-  thresh <- mycpm > 0.5
-  keep <- rowSums(thresh) >= 2
-  counts.keep <- counts[keep,]
-  keeps_tf[[i]] <- rownames(counts.keep)
+  keeps_tf[[i]] <- rownames(counts)
   condition <- c(rep("control",nrow(kang_ctr[[i]])),rep("prediction",nrow(tf_dist[[i]])))
   design <- model.matrix(~condition)
-  fit <- lmFit(counts.keep,design)
+  fit <- lmFit(counts,design)
   fit <- eBayes(fit)
   top.table <- topTable(fit,sort.by = "logFC", n = Inf)
   tables_tf[[i]] <- top.table
@@ -528,14 +520,10 @@ keeps_scgen <- list()
 for (i in 1: length(ctype)){
   temp <- data.frame(rbind(kang_ctr[[i]],scgen_pred[[i]]))
   counts <- t(temp)
-  mycpm <- edgeR::cpm(counts)
-  thresh <- mycpm > 0.5
-  keep <- rowSums(thresh) >= 2
-  counts.keep <- counts[keep,]
-  keeps_scgen[[i]] <- rownames(counts.keep)
+  keeps_scgen[[i]] <- rownames(counts)
   condition <- c(rep("control",nrow(kang_ctr[[i]])),rep("prediction",nrow(scgen_pred[[i]])))
   design <- model.matrix(~condition)
-  fit <- lmFit(counts.keep,design)
+  fit <- lmFit(counts,design)
   fit <- eBayes(fit)
   top.table <- topTable(fit,sort.by = "logFC", n = Inf)
   tables_scgen[[i]] <- top.table
