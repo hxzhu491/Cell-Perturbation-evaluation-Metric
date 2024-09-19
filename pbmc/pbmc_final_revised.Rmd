@@ -431,16 +431,20 @@ for (id in 1: length(DEG_genes_obs[[6]])){
 ```{r, fig.height=5}
 library(EnhancedVolcano)
 
+v_list_obs <- list()
+
 for (i in 1: length(ctype)){
-  v <- EnhancedVolcano(tables[[i]],
-       lab = keeps[[i]],
-       title = ctype[i],
-       x = 'logFC',
-       y = 'adj.P.Val',
-       pCutoff=1e-10,
-       FCcutoff = 0.3)
-  print(v)
+  v_list_obs[[i]] <- EnhancedVolcano(tables[[i]],
+                 lab = keeps[[i]],
+                 title = ctype[i],
+                 x = 'logFC',
+                 y = 'adj.P.Val',
+                 pCutoff=1e-10,
+                 FCcutoff = 0.3)
+  print(v_list_obs[[i]])
 }
+
+names(v_list_obs[[i]]) <- ctype
 ```
 
 ### Volcano plots using predictions
@@ -560,6 +564,8 @@ for (i in 1: length(ctype)){
 }
 ```
 
+
+
 ## Evaluating prediction using ROC
 
 ### Method 1: scoring based on log fold change
@@ -648,6 +654,7 @@ names(tf_cfm) <- ctname
 #### scGen
 
 ```{r}
+dt_scgen_list <- list()
 for (i in 1: length(ctype)){
   tr.lfc <- rep(0,length(genes))
   test <- tables[[i]]
@@ -665,6 +672,7 @@ for (i in 1: length(ctype)){
   status[which(!(genes %in% DEG_genes_obs[[i]]) & !(genes %in% DEG_genes_scgen[[i]]))] <- "True negative"
   dt <- data.frame(genes,tr.lfc,scgen.lfc,status)
   names(dt) <- c("genes", "observation", "prediction", "status")
+  dt_scgen_list[[i]] <- dt
   
   p <- ggplot(dt, aes(x=observation, y=prediction, color=status)) + 
   geom_point(shape=1,alpha=0.8)+
@@ -681,6 +689,7 @@ for (i in 1: length(ctype)){
 #### Two-factor
 
 ```{r}
+dt_tf_list <- list()
 for (i in 1: length(ctype)){
   tr.lfc <- rep(0,length(genes))
   test <- tables[[i]]
@@ -698,6 +707,7 @@ for (i in 1: length(ctype)){
   status[which(!(genes %in% DEG_genes_obs[[i]]) & !(genes %in% DEG_genes_tf[[i]]))] <- "True negative"
   dt <- data.frame(genes,tr.lfc,tf.lfc,status)
   names(dt) <- c("genes", "observation", "prediction", "status")
+  dt_tf_list[[i]] <- dt
   
   p <- ggplot(dt, aes(x=observation, y=prediction, color=status)) + 
   geom_point(shape=1,alpha=0.8)+
@@ -829,3 +839,120 @@ intersect_all <- function(a,b,...){
 intersect_all(DEG_genes_obs[[1]],DEG_genes_obs[[2]],DEG_genes_obs[[3]],DEG_genes_obs[[4]],DEG_genes_obs[[5]],DEG_genes_obs[[6]],DEG_genes_obs[[7]])
 ```
 
+### Compare volcano plots
+
+```{r, fig.height=10}
+## CD4T 
+## Create 3 volcano plots, mark the true positive findings
+
+cd4t_tb_iv <- tables[[3]]
+cd4t_tb_tf <- tables_tf_new[[3]]
+cd4t_tb_scgen <- tables_scgen[[3]]
+
+## in vitro
+
+keyvals <- ifelse(abs(cd4t_tb_iv$logFC) > 0.3, "red", "grey")
+names(keyvals)[keyvals=="red"] <- "DE"
+names(keyvals)[keyvals=="grey"] <- "Not DE"
+
+vp_iv <- EnhancedVolcano(cd4t_tb_iv,
+                         x="logFC",
+                         y="adj.P.Val",
+                         lab=rownames(cd4t_tb_iv),
+                         pCutoff=1e-10,
+                         FCcutoff = 0.3,
+                         colCustom = keyvals,
+                         colAlpha = 1,
+                         legendPosition = "top",
+                         pointSize = c(ifelse(abs(cd4t_tb_iv$logFC) > 0.3,4,2)),
+                         drawConnectors = TRUE,
+                         widthConnectors = 0.5,
+                         title = "In Vitro DEG",
+                         subtitle = "",
+                         xlim = c(-1,2.2))
+vp_iv
+
+########
+tp_tf <- intersect(DEG_genes_obs[[3]],DEG_genes_tf[[3]])
+keyvals <- ifelse(abs(cd4t_tb_tf$logFC) <= 0.3, "grey", 
+                  ifelse(cd4t_tb_tf$Row.names %in% tp_tf,"red","blue"))
+names(keyvals)[keyvals=="blue"] <- "FP"
+names(keyvals)[keyvals=="grey"] <- "Not DE"
+names(keyvals)[keyvals=="red"] <- "TP"
+
+vp_tf <- EnhancedVolcano(cd4t_tb_tf,
+                         x="logFC",
+                         y="pval",
+                         lab=cd4t_tb_tf$Row.names,
+                         selectLab = tp_tf,
+                         pCutoff=1e-10,
+                         FCcutoff = 0.3,
+                         colCustom = keyvals,
+                         colAlpha = 1,
+                         legendPosition = "top",
+                         pointSize = c(ifelse(cd4t_tb_tf$Row.names %in% tp_tf, 4,2)),
+                         drawConnectors = TRUE,
+                         widthConnectors = 0.5,
+                         title = "Two-factor DEG",
+                         subtitle = "",
+                         max.overlaps = 50,
+                         xlim = c(-1,2.5)
+                         )
+vp_tf
+#########
+tp_scgen <- intersect(DEG_genes_obs[[3]],DEG_genes_scgen[[3]])
+keyvals <- ifelse(abs(cd4t_tb_scgen$logFC) <= 0.3, "grey", 
+                  ifelse(rownames(cd4t_tb_scgen) %in% tp_scgen,"red","blue"))
+names(keyvals)[keyvals=="blue"] <- "FP"
+names(keyvals)[keyvals=="grey"] <- "Not DE"
+names(keyvals)[keyvals=="red"] <- "TP"
+
+vp_scgen <- EnhancedVolcano(cd4t_tb_scgen,
+                         x="logFC",
+                         y="adj.P.Val",
+                         lab=rownames(cd4t_tb_scgen),
+                         selectLab = tp_scgen,
+                         pCutoff=1e-10,
+                         FCcutoff = 0.3,
+                         colCustom = keyvals,
+                         colAlpha = 1,
+                         legendPosition = "top",
+                         pointSize = c(ifelse(rownames(cd4t_tb_scgen) %in% tp_scgen, 4,2)),
+                         drawConnectors = TRUE,
+                         widthConnectors = 0.5,
+                         title = "scGen DEG",
+                         subtitle = "",
+                         max.overlaps = 50,
+                         xlim = c(-1,2.2)
+                         )
+vp_scgen
+
+library(gridExtra)
+library(grid)
+pdf("test.pdf",height = 8, width = 25)
+grid.arrange(vp_iv,vp_tf,vp_scgen, ncol=3)
+dev.off()
+
+vp <- grid.arrange(vp_iv,vp_tf,vp_scgen, ncol=3)
+
+vp
+```
+
+### Compare scatter plot for confusion matrix
+
+```{r}
+## cd4t
+lfc_dt_cd4t <- data.frame(rbind(dt_scgen_list[[3]],dt_tf_list[[3]]))
+m <- c(rep("scGen",nrow(dt_scgen_list[[3]])),rep("Two-factor",nrow(dt_tf_list[[3]])))
+lfc_dt_cd4t <- data.frame(lfc_dt_cd4t,m)
+
+p <- ggplot(lfc_dt_cd4t, aes(x=prediction, y=observation, color=status)) + 
+  geom_point(shape=1,alpha=0.8)+
+  geom_hline(yintercept=0.3, linetype="dashed", color = "black")+
+  geom_hline(yintercept=-0.3, linetype="dashed", color = "black")+
+  geom_vline(xintercept=0.3, linetype="dashed", color = "black")+
+  geom_vline(xintercept=-0.3, linetype="dashed", color = "black")+
+  xlab("True Logfc") + ylab("Predicted Logfc")+ ggtitle(ctype[[3]])+
+  theme(plot.tag.position = "topright")+facet_wrap(~m, nrow=1)
+  print(p)
+```
