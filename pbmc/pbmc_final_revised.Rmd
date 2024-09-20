@@ -728,6 +728,7 @@ library(yardstick)
 library(dplyr)
 pr_auc_scgen <- list()
 pr_auc_tf <- list()
+pr_curve <- list()
 for (i in 1: length(ctype)){
   true <- rep(0,length(genes))
   true[which(genes %in% DEG_genes_obs[[i]])] <- 1
@@ -740,7 +741,7 @@ for (i in 1: length(ctype)){
   dtf <- data.frame(dtf,method)
   pr_auc_scgen[[i]] <- pr_auc(dt, true, score, event_level = "second")
   pr_auc_tf[[i]] <- pr_auc(dt2, true, score, event_level = "second")
-  p <- dtf %>%
+  pr_curve[[i]] <- dtf %>%
          group_by(method) %>%
          pr_curve(true, score, event_level = "second") %>%
          ggplot(aes(x = recall, y = precision, color=method)) +
@@ -748,7 +749,7 @@ for (i in 1: length(ctype)){
          coord_equal() +
          theme_bw()+
          ggtitle(ctype[[i]])
-         print(p)
+         print(pr_curve[[i]])
 }
 ```
 
@@ -837,6 +838,38 @@ intersect_all <- function(a,b,...){
 }
 
 intersect_all(DEG_genes_obs[[1]],DEG_genes_obs[[2]],DEG_genes_obs[[3]],DEG_genes_obs[[4]],DEG_genes_obs[[5]],DEG_genes_obs[[6]],DEG_genes_obs[[7]])
+```
+
+## Get plots for CD4T
+
+### Compare R2
+
+```{r}
+  status <- rep("non DE", length(genes))
+  status[which(genes %in% DEG_genes_obs[[3]])] <- "DE"
+  observation <- kang_sti_m[[3]]
+  prediction <- tf_pred[[3]]
+  dt_r2_tf <- data.frame(genes,observation,prediction,status)
+  names(dt_r2_tf) <- c("genes", "observation", "prediction", "status")
+  
+  observation <- kang_sti_m[[3]]
+  prediction <- scgen_pred_m[[3]]
+  dt_r2_scgen <- data.frame(genes,observation,prediction,status)
+  names(dt_r2_scgen) <- c("genes", "observation", "prediction", "status")
+  
+  dt_r2 <- data.frame(rbind(dt_r2_scgen,dt_r2_tf))
+  method <- c(rep("scgen",nrow(dt_r2_scgen)),rep("two-factor",nrow(dt_r2_tf)))
+  dt_r2 <- data.frame(dt_r2,method)
+  
+  
+  labs <- c(paste0("scgen, R2=",R2_scgen[3]),paste0("two-factor, R2=",R2_tf[3]))
+  names(labs) <- c("Scgen","Two-factor")
+  p_r2 <- ggplot(dt_r2, aes(x=prediction, y=observation, color=status)) + 
+  geom_point()+
+  geom_smooth(method=lm, na.rm = TRUE,colour="black")+
+  scale_colour_manual(name="status", values=c("red","blue"))+
+  xlab("predicted stimulated expressions") + ylab("In vitro stimulated expressions")+facet_wrap(~method,nrow = 1,labeller = labeller(method=labs))+theme(strip.text = element_text(size=18))+ theme(legend.position="none")+theme(axis.title = element_text(size=15))
+  print(p_r2)
 ```
 
 ### Compare volcano plots
@@ -929,13 +962,14 @@ vp_scgen
 
 library(gridExtra)
 library(grid)
+library(cowplot)
 pdf("test.pdf",height = 8, width = 25)
-grid.arrange(vp_iv,vp_tf,vp_scgen, ncol=3)
+plot_grid(vp_iv,vp_tf,vp_scgen, ncol = 3)
 dev.off()
 
-vp <- grid.arrange(vp_iv,vp_tf,vp_scgen, ncol=3)
+vp <- plot_grid(vp_iv,vp_tf,vp_scgen, ncol = 3)
 
-vp
+
 ```
 
 ### Compare scatter plot for confusion matrix
@@ -946,13 +980,271 @@ lfc_dt_cd4t <- data.frame(rbind(dt_scgen_list[[3]],dt_tf_list[[3]]))
 m <- c(rep("scGen",nrow(dt_scgen_list[[3]])),rep("Two-factor",nrow(dt_tf_list[[3]])))
 lfc_dt_cd4t <- data.frame(lfc_dt_cd4t,m)
 
-p <- ggplot(lfc_dt_cd4t, aes(x=prediction, y=observation, color=status)) + 
-  geom_point(shape=1,alpha=0.8)+
+p_cfm <- ggplot(lfc_dt_cd4t, aes(x=prediction, y=observation, color=status)) + 
+  geom_point(shape=1,alpha=1)+
   geom_hline(yintercept=0.3, linetype="dashed", color = "black")+
   geom_hline(yintercept=-0.3, linetype="dashed", color = "black")+
   geom_vline(xintercept=0.3, linetype="dashed", color = "black")+
   geom_vline(xintercept=-0.3, linetype="dashed", color = "black")+
-  xlab("True Logfc") + ylab("Predicted Logfc")+ ggtitle(ctype[[3]])+
-  theme(plot.tag.position = "topright")+facet_wrap(~m, nrow=1)
-  print(p)
+  xlab("Predicted LogFC") + ylab("In vitro LogFC")+ 
+  theme(strip.text = element_text(size=18))+facet_wrap(~m, nrow=1)+ theme(legend.position="none")+theme(axis.title = element_text(size=15))
+  print(p_cfm)
+```
+
+### PR-curve
+
+```{r}
+  true <- rep(0,length(genes))
+  true[which(genes %in% DEG_genes_obs[[3]])] <- 1
+  dt <- data.frame(as.factor(true),score_scgen[[3]])
+  names(dt) <- c("true","score")
+  dt2 <- data.frame(as.factor(true),score_tf[[3]])
+  names(dt2) <- c("true","score")
+  dtf <- rbind(dt,dt2)
+  method <- c(rep("scgen",nrow(dt)),rep("two-factor",nrow(dt2)))
+  dtf <- data.frame(dtf,method)
+  p_pr <- dtf %>%
+         group_by(method) %>%
+         pr_curve(true, score, event_level = "second") %>%
+         ggplot(aes(x = recall, y = precision, color=method)) +
+         geom_vline(xintercept = length(tp_genes_scgen[[3]])/length(DEG_genes_obs[[3]]),color="red",linetype="dashed")+
+         geom_vline(xintercept = length(tp_genes_tf[[3]])/length(DEG_genes_obs[[3]]),color="light blue",linetype="dashed")+
+         geom_path() +
+         coord_equal() +
+         theme_bw()+theme(axis.title = element_text(size=15))+theme(legend.key.size = unit(1.5,"cm"))
+         print(p_pr)
+```
+
+```{r,fig.height=24}
+## arrange all results for CD4T
+library(cowplot)
+
+row1 <- plot_grid(vp_iv,vp_tf,vp_scgen,align = "h",nrow=1)
+row2 <- plot_grid(p_r2,p_cfm,p_pr,align="h",axis = "t",nrow=1,labels = c("B","C","D"),label_size = 36)
+p <- plot_grid(row1,row2,nrow=2, align="hv",labels = c("A",""),label_size = 36)
+plot_grid
+
+pdf("CD4T.pdf",height=15,width = 30)
+plot_grid(row1,row2,nrow=2, align="hv",labels = c("A",""),label_size = 36)
+dev.off()
+
+```
+
+## Get plots for CD14
+
+### Compare R2
+
+```{r}
+  status <- rep("non DE", length(genes))
+  status[which(genes %in% DEG_genes_obs[[6]])] <- "DE"
+  observation <- kang_sti_m[[6]]
+  prediction <- tf_pred[[6]]
+  dt_r2_tf <- data.frame(genes,observation,prediction,status)
+  names(dt_r2_tf) <- c("genes", "observation", "prediction", "status")
+  
+  observation <- kang_sti_m[[6]]
+  prediction <- scgen_pred_m[[6]]
+  dt_r2_scgen <- data.frame(genes,observation,prediction,status)
+  names(dt_r2_scgen) <- c("genes", "observation", "prediction", "status")
+  
+  dt_r2 <- data.frame(rbind(dt_r2_scgen,dt_r2_tf))
+  method <- c(rep("scgen",nrow(dt_r2_scgen)),rep("two-factor",nrow(dt_r2_tf)))
+  dt_r2 <- data.frame(dt_r2,method)
+  
+  
+  labs <- c(paste0("scgen, R2=",R2_scgen[6]),paste0("two-factor, R2=",R2_tf[6]))
+  names(labs) <- c("scgen","two-factor")
+  p_r2 <- ggplot(dt_r2, aes(x=prediction, y=observation, color=status)) + 
+  geom_point()+
+  geom_smooth(method=lm, na.rm = TRUE,colour="black")+
+  scale_colour_manual(name="status", values=c("red","blue"))+
+  xlab("predicted stimulated expressions") + ylab("In vitro stimulated expressions")+facet_wrap(~method,nrow = 1,labeller = labeller(method=labs))+theme(strip.text = element_text(size=18))+ theme(legend.position="none")+theme(axis.title = element_text(size=15))
+  print(p_r2)
+```
+
+### Compare volcano plots
+
+```{r, fig.height=10}
+## CD4T 
+## Create 3 volcano plots, mark the true positive findings
+
+cd14_tb_iv <- tables[[6]]
+cd14_tb_tf <- tables_tf_new[[6]]
+cd14_tb_scgen <- tables_scgen[[6]]
+
+## in vitro
+
+keyvals <- ifelse(abs(cd14_tb_iv$logFC) > 0.3, "red", "grey")
+names(keyvals)[keyvals=="red"] <- "DE"
+names(keyvals)[keyvals=="grey"] <- "Not DE"
+
+vp_iv <- EnhancedVolcano(cd14_tb_iv,
+                         x="logFC",
+                         y="adj.P.Val",
+                         lab=rownames(cd14_tb_iv),
+                         pCutoff=1e-10,
+                         FCcutoff = 0.3,
+                         colCustom = keyvals,
+                         colAlpha = 1,
+                         legendPosition = "top",
+                         pointSize = c(ifelse(abs(cd14_tb_iv$logFC) > 0.3,4,2)),
+                         drawConnectors = TRUE,
+                         widthConnectors = 0.5,
+                         title = "In Vitro DEG",
+                         subtitle = "",
+                         xlim = c(-1,2.2))
+vp_iv
+
+########
+tp_tf <- intersect(DEG_genes_obs[[6]],DEG_genes_tf[[6]])
+keyvals <- ifelse(abs(cd14_tb_tf$logFC) <= 0.3, "grey", 
+                  ifelse(cd14_tb_tf$Row.names %in% tp_tf,"red","blue"))
+names(keyvals)[keyvals=="blue"] <- "FP"
+names(keyvals)[keyvals=="grey"] <- "Not DE"
+names(keyvals)[keyvals=="red"] <- "TP"
+
+vp_tf <- EnhancedVolcano(cd14_tb_tf,
+                         x="logFC",
+                         y="pval",
+                         lab=cd14_tb_tf$Row.names,
+                         selectLab = tp_tf,
+                         pCutoff=1e-10,
+                         FCcutoff = 0.3,
+                         colCustom = keyvals,
+                         colAlpha = 1,
+                         legendPosition = "top",
+                         pointSize = c(ifelse(cd14_tb_tf$Row.names %in% tp_tf, 4,2)),
+                         drawConnectors = TRUE,
+                         widthConnectors = 0.5,
+                         title = "Two-factor DEG",
+                         subtitle = "",
+                         max.overlaps = 50,
+                         xlim = c(-1,2.5)
+                         )
+vp_tf
+#########
+tp_scgen <- intersect(DEG_genes_obs[[6]],DEG_genes_scgen[[6]])
+keyvals <- ifelse(abs(cd14_tb_scgen$logFC) <= 0.3, "grey", 
+                  ifelse(rownames(cd14_tb_scgen) %in% tp_scgen,"red","blue"))
+names(keyvals)[keyvals=="blue"] <- "FP"
+names(keyvals)[keyvals=="grey"] <- "Not DE"
+names(keyvals)[keyvals=="red"] <- "TP"
+
+vp_scgen <- EnhancedVolcano(cd14_tb_scgen,
+                         x="logFC",
+                         y="adj.P.Val",
+                         lab=rownames(cd14_tb_scgen),
+                         selectLab = tp_scgen,
+                         pCutoff=1e-10,
+                         FCcutoff = 0.3,
+                         colCustom = keyvals,
+                         colAlpha = 1,
+                         legendPosition = "top",
+                         pointSize = c(ifelse(rownames(cd14_tb_scgen) %in% tp_scgen, 4,2)),
+                         drawConnectors = TRUE,
+                         widthConnectors = 0.5,
+                         title = "scGen DEG",
+                         subtitle = "",
+                         max.overlaps = 50,
+                         xlim = c(-1,2.2)
+                         )
+vp_scgen
+
+library(gridExtra)
+library(grid)
+library(cowplot)
+pdf("test.pdf",height = 8, width = 25)
+plot_grid(vp_iv,vp_tf,vp_scgen, ncol = 3)
+dev.off()
+
+vp <- plot_grid(vp_iv,vp_tf,vp_scgen, ncol = 3)
+
+
+```
+
+### Compare scatter plot for confusion matrix
+
+```{r}
+## cd14
+lfc_dt_cd14 <- data.frame(rbind(dt_scgen_list[[6]],dt_tf_list[[6]]))
+m <- c(rep("scGen",nrow(dt_scgen_list[[6]])),rep("Two-factor",nrow(dt_tf_list[[6]])))
+lfc_dt_cd14 <- data.frame(lfc_dt_cd14,m)
+
+p_cfm <- ggplot(lfc_dt_cd14, aes(x=prediction, y=observation, color=status)) + 
+  geom_point(shape=1,alpha=1)+
+  geom_hline(yintercept=0.3, linetype="dashed", color = "black")+
+  geom_hline(yintercept=-0.3, linetype="dashed", color = "black")+
+  geom_vline(xintercept=0.3, linetype="dashed", color = "black")+
+  geom_vline(xintercept=-0.3, linetype="dashed", color = "black")+
+  xlab("Predicted LogFC") + ylab("In vitro LogFC")+ 
+  theme(strip.text = element_text(size=18))+facet_wrap(~m, nrow=1)+ theme(legend.position="none")+theme(axis.title = element_text(size=15))
+  print(p_cfm)
+```
+
+### PR-curve
+
+```{r}
+  true <- rep(0,length(genes))
+  true[which(genes %in% DEG_genes_obs[[6]])] <- 1
+  dt <- data.frame(as.factor(true),score_scgen[[6]])
+  names(dt) <- c("true","score")
+  dt2 <- data.frame(as.factor(true),score_tf[[6]])
+  names(dt2) <- c("true","score")
+  dtf <- rbind(dt,dt2)
+  method <- c(rep("scgen",nrow(dt)),rep("two-factor",nrow(dt2)))
+  dtf <- data.frame(dtf,method)
+  p_pr <- dtf %>%
+         group_by(method) %>%
+         pr_curve(true, score, event_level = "second") %>%
+         ggplot(aes(x = recall, y = precision, color=method)) +
+         geom_vline(xintercept = length(tp_genes_scgen[[6]])/length(DEG_genes_obs[[6]]),color="red",linetype="dashed")+
+         geom_vline(xintercept = length(tp_genes_tf[[6]])/length(DEG_genes_obs[[6]]),color="light blue",linetype="dashed")+
+         geom_path() +
+         coord_equal() +
+         theme_bw()+theme(axis.title = element_text(size=15))+theme(legend.key.size = unit(1.5,"cm"))
+         print(p_pr)
+```
+
+```{r,fig.height=24}
+## arrange all results for CD4T
+library(cowplot)
+
+row1 <- plot_grid(vp_iv,vp_tf,vp_scgen,align = "h",nrow=1)
+row2 <- plot_grid(p_r2,p_cfm,p_pr,align="h",axis = "t",nrow=1,labels = c("B","C","D"),label_size = 36)
+p <- plot_grid(row1,row2,nrow=2, align="hv",labels = c("A",""),label_size = 36)
+plot_grid
+
+pdf("CD14.pdf",height=15,width = 30)
+plot_grid(row1,row2,nrow=2, align="hv",labels = c("A",""),label_size = 36)
+dev.off()
+
+```
+
+## Compare results across all cell types
+
+```{r}
+## R2 barplot
+cell_type <- c(ctype,ctype)
+R2 <- c(R2_scgen,R2_tf)
+model <- c(rep("scgen",length(ctype)),rep("two-factor",length(ctype)))
+dtf <- data.frame(cell_type,R2,model)
+
+ggplot(dtf, aes(fill=model, y=R2, x=cell_type)) + geom_bar(position = "dodge", stat="identity")
+```
+```{r}
+### auc pr barplot
+scgen_pr_auc <- c()
+for (i in 1:length(pr_auc_scgen)){
+  scgen_pr_auc[i] <- as.numeric(pr_auc_scgen[[i]][1,3])
+}
+
+tf_pr_auc <- c()
+for (i in 1:length(pr_auc_tf)){
+  tf_pr_auc[i] <- as.numeric(pr_auc_tf[[i]][1,3])
+}
+
+pr_auc <- c(scgen_pr_auc,tf_pr_auc)
+dtf <- data.frame(cell_type,pr_auc,model)
+
+ggplot(dtf, aes(fill=model, y=pr_auc, x=cell_type)) + geom_bar(position = "dodge", stat="identity")
 ```
