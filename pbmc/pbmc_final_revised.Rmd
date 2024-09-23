@@ -842,6 +842,10 @@ intersect_all(DEG_genes_obs[[1]],DEG_genes_obs[[2]],DEG_genes_obs[[3]],DEG_genes
 
 ## Get plots for CD4T
 
+```{r}
+library(latex2exp)
+```
+
 ### Compare R2
 
 ```{r}
@@ -858,17 +862,16 @@ intersect_all(DEG_genes_obs[[1]],DEG_genes_obs[[2]],DEG_genes_obs[[3]],DEG_genes
   names(dt_r2_scgen) <- c("genes", "observation", "prediction", "status")
   
   dt_r2 <- data.frame(rbind(dt_r2_scgen,dt_r2_tf))
-  method <- c(rep("scgen",nrow(dt_r2_scgen)),rep("two-factor",nrow(dt_r2_tf)))
+  method <- c(rep("scGen",nrow(dt_r2_scgen)),rep("Two-factor",nrow(dt_r2_tf)))
   dt_r2 <- data.frame(dt_r2,method)
   
+dt_r2$method <- factor(dt_r2$method, labels = c(TeX(paste("scGen, $R^2 = $", R2_scgen[3])),TeX(paste("Two-factor, $R^2 = $", R2_tf[3]))))
   
-  labs <- c(paste0("scgen, R2=",R2_scgen[3]),paste0("two-factor, R2=",R2_tf[3]))
-  names(labs) <- c("Scgen","Two-factor")
   p_r2 <- ggplot(dt_r2, aes(x=prediction, y=observation, color=status)) + 
   geom_point()+
   geom_smooth(method=lm, na.rm = TRUE,colour="black")+
   scale_colour_manual(name="status", values=c("red","blue"))+
-  xlab("predicted stimulated expressions") + ylab("In vitro stimulated expressions")+facet_wrap(~method,nrow = 1,labeller = labeller(method=labs))+theme(strip.text = element_text(size=18))+ theme(legend.position="none")+theme(axis.title = element_text(size=15))
+  xlab("predicted stimulated expressions") + ylab("In vitro stimulated expressions")+facet_wrap(~method,nrow = 1,labeller = label_parsed)+theme_bw()+theme(strip.text = element_text(size=12))+ theme(legend.position="bottom")+theme(axis.title = element_text(size=12))
   print(p_r2)
 ```
 
@@ -880,6 +883,7 @@ intersect_all(DEG_genes_obs[[1]],DEG_genes_obs[[2]],DEG_genes_obs[[3]],DEG_genes
 
 cd4t_tb_iv <- tables[[3]]
 cd4t_tb_tf <- tables_tf_new[[3]]
+cd4t_tb_tf <- cd4t_tb_tf[order(abs(cd4t_tb_tf$logFC),decreasing = TRUE),]
 cd4t_tb_scgen <- tables_scgen[[3]]
 
 ## in vitro
@@ -891,18 +895,24 @@ names(keyvals)[keyvals=="grey"] <- "Not DE"
 vp_iv <- EnhancedVolcano(cd4t_tb_iv,
                          x="logFC",
                          y="adj.P.Val",
-                         lab=rownames(cd4t_tb_iv),
+                         lab = rownames(cd4t_tb_iv),
+                         selectLab = rownames(cd4t_tb_iv)[1:10],
                          pCutoff=1e-10,
                          FCcutoff = 0.3,
                          colCustom = keyvals,
                          colAlpha = 1,
-                         legendPosition = "top",
+                         legendPosition = "bottom",
                          pointSize = c(ifelse(abs(cd4t_tb_iv$logFC) > 0.3,4,2)),
                          drawConnectors = TRUE,
                          widthConnectors = 0.5,
-                         title = "In Vitro DEG",
-                         subtitle = "",
-                         xlim = c(-1,2.2))
+                         title = NULL,
+                         subtitle = NULL,
+                         xlim = c(-1,2.2),
+                         gridlines.major = FALSE,
+                         gridlines.minor = FALSE,
+                         parseLabels = TRUE,
+                         boxedLabels = TRUE,
+                         caption = "In Vitro DEG")
 vp_iv
 
 ########
@@ -917,19 +927,24 @@ vp_tf <- EnhancedVolcano(cd4t_tb_tf,
                          x="logFC",
                          y="pval",
                          lab=cd4t_tb_tf$Row.names,
-                         selectLab = tp_tf,
+                         selectLab = cd4t_tb_tf$Row.names[1:10],
                          pCutoff=1e-10,
                          FCcutoff = 0.3,
                          colCustom = keyvals,
                          colAlpha = 1,
-                         legendPosition = "top",
+                         legendPosition = "bottom",
                          pointSize = c(ifelse(cd4t_tb_tf$Row.names %in% tp_tf, 4,2)),
                          drawConnectors = TRUE,
                          widthConnectors = 0.5,
-                         title = "Two-factor DEG",
-                         subtitle = "",
+                         title = NULL,
+                         subtitle = NULL,
                          max.overlaps = 50,
-                         xlim = c(-1,2.5)
+                         xlim = c(-1,3.3),
+                         gridlines.major = FALSE,
+                         gridlines.minor = FALSE,
+                         parseLabels = TRUE,
+                         boxedLabels = TRUE,
+                         caption = "Two-factor DEG"
                          )
 vp_tf
 #########
@@ -944,19 +959,24 @@ vp_scgen <- EnhancedVolcano(cd4t_tb_scgen,
                          x="logFC",
                          y="adj.P.Val",
                          lab=rownames(cd4t_tb_scgen),
-                         selectLab = tp_scgen,
+                         selectLab = rownames(cd4t_tb_scgen)[1:10],
                          pCutoff=1e-10,
                          FCcutoff = 0.3,
                          colCustom = keyvals,
                          colAlpha = 1,
-                         legendPosition = "top",
+                         legendPosition = "bottom",
                          pointSize = c(ifelse(rownames(cd4t_tb_scgen) %in% tp_scgen, 4,2)),
                          drawConnectors = TRUE,
                          widthConnectors = 0.5,
-                         title = "scGen DEG",
-                         subtitle = "",
+                         title = NULL,
+                         subtitle = NULL,
                          max.overlaps = 50,
-                         xlim = c(-1,2.2)
+                         xlim = c(-1,2.2),
+                         gridlines.major = FALSE,
+                         gridlines.minor = FALSE,
+                         parseLabels = TRUE,
+                         boxedLabels = TRUE,
+                         caption = "scGen DEG"
                          )
 vp_scgen
 
@@ -979,6 +999,10 @@ vp <- plot_grid(vp_iv,vp_tf,vp_scgen, ncol = 3)
 lfc_dt_cd4t <- data.frame(rbind(dt_scgen_list[[3]],dt_tf_list[[3]]))
 m <- c(rep("scGen",nrow(dt_scgen_list[[3]])),rep("Two-factor",nrow(dt_tf_list[[3]])))
 lfc_dt_cd4t <- data.frame(lfc_dt_cd4t,m)
+r2_lfc_scgen <- round(cor(lfc_dt_cd4t$observation[lfc_dt_cd4t$m=="scGen"],lfc_dt_cd4t$prediction[lfc_dt_cd4t$m=="scGen"])^2,2)
+r2_lfc_tf <- round(cor(lfc_dt_cd4t$observation[lfc_dt_cd4t$m=="Two-factor"],lfc_dt_cd4t$prediction[lfc_dt_cd4t$m=="Two-factor"])^2,2)
+
+lfc_dt_cd4t$m <- factor(lfc_dt_cd4t$m, labels = c(TeX(paste("scGen, $R^2 = $", r2_lfc_scgen)),TeX(paste("Two-factor, $R^2 = $", r2_lfc_tf))))
 
 p_cfm <- ggplot(lfc_dt_cd4t, aes(x=prediction, y=observation, color=status)) + 
   geom_point(shape=1,alpha=1)+
@@ -987,7 +1011,9 @@ p_cfm <- ggplot(lfc_dt_cd4t, aes(x=prediction, y=observation, color=status)) +
   geom_vline(xintercept=0.3, linetype="dashed", color = "black")+
   geom_vline(xintercept=-0.3, linetype="dashed", color = "black")+
   xlab("Predicted LogFC") + ylab("In vitro LogFC")+ 
-  theme(strip.text = element_text(size=18))+facet_wrap(~m, nrow=1)+ theme(legend.position="none")+theme(axis.title = element_text(size=15))
+  geom_smooth(method=lm, na.rm = TRUE,colour="black")+
+  theme_bw()+
+  theme(strip.text = element_text(size=12))+facet_wrap(.~m, nrow=1,labeller = label_parsed)+theme(axis.title = element_text(size=12))+theme(legend.position = "bottom")
   print(p_cfm)
 ```
 
@@ -1011,21 +1037,19 @@ p_cfm <- ggplot(lfc_dt_cd4t, aes(x=prediction, y=observation, color=status)) +
          geom_vline(xintercept = length(tp_genes_tf[[3]])/length(DEG_genes_obs[[3]]),color="light blue",linetype="dashed")+
          geom_path() +
          coord_equal() +
-         theme_bw()+theme(axis.title = element_text(size=15))+theme(legend.key.size = unit(1.5,"cm"))
+         theme_bw()+theme(axis.title = element_text(size=15))+theme(legend.key.size = unit(1.5,"cm"))+
+    theme(legend.position = "bottom")+theme(panel.grid = element_blank())
          print(p_pr)
 ```
 
 ```{r,fig.height=24}
 ## arrange all results for CD4T
 library(cowplot)
+r1 <- plot_grid(p_r2,p_cfm,nrow=1,ncol=2,labels = c("a","b"), align = "h",axis = "t",label_size = 18)
+r2 <- plot_grid(vp_iv, vp_tf, p_pr, NULL, vp_scgen, NULL, labels = c("c","","d","","",""), ncol=3,nrow=2,align = "hv",label_size = 18)
 
-row1 <- plot_grid(vp_iv,vp_tf,vp_scgen,align = "h",nrow=1)
-row2 <- plot_grid(p_r2,p_cfm,p_pr,align="h",axis = "t",nrow=1,labels = c("B","C","D"),label_size = 36)
-p <- plot_grid(row1,row2,nrow=2, align="hv",labels = c("A",""),label_size = 36)
-plot_grid
-
-pdf("CD4T.pdf",height=15,width = 30)
-plot_grid(row1,row2,nrow=2, align="hv",labels = c("A",""),label_size = 36)
+pdf("CD4T.pdf",height=14,width = 18)
+plot_grid(r1,r2,nrow=2, align = "hv",rel_heights = c(1,3))
 dev.off()
 
 ```
@@ -1220,10 +1244,10 @@ dev.off()
 
 ```
 
+
 ## Compare results across all cell types
 
 ```{r}
-library(latex2exp)
 ## R2 barplot
 cell_type <- c(ctype,ctype)
 R2 <- c(R2_scgen,R2_tf)
@@ -1231,8 +1255,30 @@ model <- c(rep("scgen",length(ctype)),rep("two-factor",length(ctype)))
 dtf1 <- data.frame(cell_type,R2,model)
 
 p1 <- ggplot(dtf1, aes(fill=model, y=R2, x=cell_type)) + geom_bar(position = "dodge", stat="identity")+geom_text(aes(label = R2),position = position_dodge(width = 0.9), vjust=-0.3)+xlab("Cell type")+
-  ylab(TeX(r'($R^2$)'))+ theme(legend.position="none")
+  ylab(TeX("$R^2$: predicted expressions vs in vitro expressions"))+ theme(legend.position="none") + ylim(c(0,1))
 p1
+```
+
+```{r}
+##lfc R2 barplot
+scgen_lfc_r2 <- c()
+for (i in 1:length(ctype)){
+  scgen_lfc_r2[i] <- round(cor(dt_scgen_list[[i]]$observation,dt_scgen_list[[i]]$prediction)^2,2)
+}
+
+tf_lfc_r2 <- c()
+for (i in 1:length(ctype)){
+  tf_lfc_r2[i] <- round(cor(dt_tf_list[[i]]$observation,dt_tf_list[[i]]$prediction)^2,2)
+}
+
+cell_type <- c(ctype,ctype)
+lfc_R2 <- c(scgen_lfc_r2,tf_lfc_r2)
+model <- c(rep("scGen",length(ctype)),rep("Two-factor",length(ctype)))
+dtf3 <- data.frame(cell_type,lfc_R2,model)
+
+p2 <- ggplot(dtf3, aes(fill=model, y=lfc_R2, x=cell_type)) + geom_bar(position = "dodge", stat="identity")+geom_text(aes(label = lfc_R2),position = position_dodge(width = 0.9), vjust=-0.3)+xlab("Cell type")+
+  ylab(TeX("$R^2$: predicted logFC vs in vitro logFC"))+ theme(legend.position="none") + ylim(c(0,1))
+p2
 ```
 
 ```{r}
@@ -1250,14 +1296,19 @@ for (i in 1:length(pr_auc_tf)){
 pr_auc <- c(scgen_pr_auc,tf_pr_auc)
 dtf2 <- data.frame(cell_type,pr_auc,model)
 
-p2 <- ggplot(dtf2, aes(fill=model, y=pr_auc, x=cell_type)) + geom_bar(position = "dodge", stat="identity")+geom_text(aes(label = pr_auc),position = position_dodge(width = 0.9), vjust=-0.3)+xlab("Cell type")+ylab("AUC-PR")
-p2
+p3 <- ggplot(dtf2, aes(fill=model, y=pr_auc, x=cell_type)) + geom_bar(position = "dodge", stat="identity")+geom_text(aes(label = pr_auc),position = position_dodge(width = 0.9), vjust=-0.3)+xlab("Cell type")+ylab("AUC-PR") +ylim(c(0,1))
+p3
 
 
 ```
 
 ```{r,fig.width=20}
-pdf("r2_auc.pdf",height = 8, width = 20)
-plot_grid(p1,p2,nrow=1,rel_widths = c(1,1.2),labels = c("A","B"))
+pdf("r2_auc.pdf",height = 6, width = 20)
+plot_grid(p1,p2,p3,nrow=1,rel_widths = c(1,1,1.3),labels = c("a","b","c"))
 dev.off()
+```
+
+```{r}
+## PR curve for all cell types 
+
 ```

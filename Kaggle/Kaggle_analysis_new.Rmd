@@ -295,10 +295,6 @@ dev.off()
 ## Fit benchmark models
 
 ```{r}
-source("./models/cell_model.R")
-```
-
-```{r}
 ## Create all possible combinations in the dataset
 cmb <- data.frame(bulk_meta$cell_type,bulk_meta$sm_name)
 cmb_vec <- paste0(bulk_meta$cell_type,"#",bulk_meta$sm_name)
@@ -862,8 +858,7 @@ for (i in 1:100){
   geom_point(shape=2,alpha=0.8, color="blue")+
   geom_smooth(method=lm, na.rm = TRUE,colour="black")+
   xlab("in_vitro_mean") + ylab("in_silico_prediction")+ ggtitle(paste0(cmb_df_temp$cell_type[i],"_",cmb_df_temp$sm_name[i]))+
-  labs(tag = paste0("R2=",r2))+ theme(plot.tag.position = "topright")+
-    xlim(0,2000) + ylim(0,2000)
+  labs(tag = paste0("R2=",r2))+ theme(plot.tag.position = "topright")
   print(p)
 }
 ```
@@ -894,10 +889,10 @@ for (i in 1:100){
   obs_expr <- bulk_adata_X[ix,]
   obs_mean <- apply(obs_expr,2,mean)
   ix_n <- pt_pred_full_temp$cell_type==cmb_df_temp$cell_type[i] & pt_pred_full_temp$sm_name==cmb_df_temp$sm_name[i]
-  pred_expr <- pt_pred_full_temp[ix_n,-(1:6)]
+  pred_expr <- pt_pred_full_temp[ix_n,-(1:7)]
   pred_mean <- apply(pred_expr,2,mean)
   r2 <- round(cor(obs_mean,pred_mean)^2,2)
-  d 
+  
   dt <- data.frame(gene_name,obs_mean,pred_mean)
   names(dt) <- c("gene_name","in_vitro_mean","in_silico_prediction")
   
@@ -905,8 +900,310 @@ for (i in 1:100){
   geom_point(shape=2,alpha=0.8, color="blue")+
   geom_smooth(method=lm, na.rm = TRUE,colour="black")+
   xlab("in_vitro_mean") + ylab("in_silico_prediction")+ ggtitle(paste0(cmb_df_temp$cell_type[i],"_",cmb_df_temp$sm_name[i]))+
-  labs(tag = paste0("R2=",r2))+ theme(plot.tag.position = "topright")+
-    xlim(0,2000) + ylim(0,2000)
+  labs(tag = paste0("R2=",r2))+ theme(plot.tag.position = "topright")
   print(p)
+}
+```
+
+### Two factor model prediction
+
+```{r}
+### cmb for creating R2
+cmb_temp <- data.frame(tf_pred_full_temp$cell_type,tf_pred_full_temp$sm_name)
+cmb_vec_temp <- paste0(tf_pred_full_temp$cell_type,"#",tf_pred_full_temp$sm_name)
+cmb_uni_temp <- unique(cmb_vec_temp)
+cmb_list_temp <- strsplit(cmb_uni_temp, split = "#")
+
+cmb_cell_temp <- c()
+cmb_pert_temp <- c()
+for (i in 1:length(cmb_list_temp)){
+  cmb_cell_temp[i] <- cmb_list_temp[[i]][1]
+  cmb_pert_temp[i] <- cmb_list_temp[[i]][2]
+}
+
+cmb_df_temp <- data.frame(cmb_cell_temp,cmb_pert_temp)
+names(cmb_df_temp) <- c("cell_type", "sm_name")
+
+## R2 for first 100 test sets
+
+for (i in 1:100){
+  ix <- bulk_meta$cell_type==cmb_df_temp$cell_type[i] & bulk_meta$sm_name==cmb_df_temp$sm_name[i]
+  obs_expr <- bulk_adata_X[ix,]
+  obs_mean <- apply(obs_expr,2,mean)
+  ix_n <- tf_pred_full_temp$cell_type==cmb_df_temp$cell_type[i] & tf_pred_full_temp$sm_name==cmb_df_temp$sm_name[i]
+  pred_expr <- tf_pred_full_temp[ix_n,-(1:7)]
+  pred_mean <- apply(pred_expr,2,mean)
+  r2 <- round(cor(obs_mean,pred_mean)^2,2)
+  
+  dt <- data.frame(gene_name,obs_mean,pred_mean)
+  names(dt) <- c("gene_name","in_vitro_mean","in_silico_prediction")
+  
+  p <- ggplot(dt, aes(x=in_vitro_mean, y=in_silico_prediction)) + 
+  geom_point(shape=2,alpha=0.8, color="blue")+
+  geom_smooth(method=lm, na.rm = TRUE,colour="black")+
+  xlab("in_vitro_mean") + ylab("in_silico_prediction")+ ggtitle(paste0(cmb_df_temp$cell_type[i],"_",cmb_df_temp$sm_name[i]))+
+  labs(tag = paste0("R2=",r2))+ theme(plot.tag.position = "topright")
+  print(p)
+}
+```
+
+## DE analysis with in silico predictions
+
+### Get DE result for cell model prediction
+
+```{r}
+## add control into the prediction dataset
+control <- bulk_full[bulk_full$sm_name=="DMSO" | bulk_full$sm_name == "Dabrafenib" | bulk_full$sm_name == "Belinostat", ]
+
+ct_DE <- data.frame(rbind(control,ct_pred_full))
+
+pert <- unique(ct_DE$sm_name)
+Rpert_uni <- c(1:length(pert))
+
+Rpert <- c()
+for (i in 1:nrow(ct_DE)){
+  Rpert[i] <- Rpert_uni[which(ct_DE$sm_name[i]==pert)]
+}
+```
+
+```{r}
+## Use limma for DE analysis
+## B cell type
+ct_DE_B <- ct_DE[ct_DE$cell_type=="B cells",]
+B_Rpert <- as.factor(Rpert[ct_DE$cell_type=="B cells"])
+donor_id <- ct_DE_B$donor_id
+plate_name <- ct_DE_B$plate_name
+row <- ct_DE_B$row
+
+counts <- data.frame(t(ct_DE_B[,-(1:6)]))
+counts[counts<0] <- 0
+d0 <- DGEList(counts)
+d0 <- calcNormFactors(d0)
+
+mm <- model.matrix(~0+B_Rpert+donor_id+plate_name+row)
+y <- voom(d0, mm, plot=TRUE)
+fit <- lmFit(y, mm)
+
+grp_B <- colnames(coef(fit))[c(1,3:15)]
+result_ct_list_B <- list()
+for (i in 1:length(grp_B)){
+  contr <- makeContrasts(contrasts = paste0(grp_B[i],"-","B_Rpert2"), levels = colnames(coef(fit)))
+  tmp <- contrasts.fit(fit, contr)
+  tmp <- eBayes(tmp)
+  result_ct_list_B[[i]] <- topTable(tmp,  n=Inf, sort='none')
+}
+
+## Myeloid 
+
+ct_DE_Myeloid <- ct_DE[ct_DE$cell_type=="Myeloid cells",]
+Myeloid_Rpert <- as.factor(Rpert[ct_DE$cell_type=="Myeloid cells"])
+donor_id <- ct_DE_Myeloid$donor_id
+plate_name <- ct_DE_Myeloid$plate_name
+row <- ct_DE_Myeloid$row
+
+counts <- data.frame(t(ct_DE_Myeloid[,-(1:6)]))
+counts[counts<0] <- 0
+d0 <- DGEList(counts)
+d0 <- calcNormFactors(d0)
+
+mm <- model.matrix(~0+Myeloid_Rpert+donor_id+plate_name+row)
+y <- voom(d0, mm, plot=TRUE)
+fit <- lmFit(y, mm)
+
+grp_Myeloid <- colnames(coef(fit))[c(1,3:16)]
+result_ct_list_Myeloid <- list()
+for (i in 1:length(grp_Myeloid)){
+  contr <- makeContrasts(contrasts = paste0(grp_Myeloid[i],"-","Myeloid_Rpert2"), levels = colnames(coef(fit)))
+  tmp <- contrasts.fit(fit, contr)
+  tmp <- eBayes(tmp)
+  result_ct_list_Myeloid[[i]] <- topTable(tmp,  n=Inf, sort='none')
+}
+
+## NK
+
+ct_DE_NK <- ct_DE[ct_DE$cell_type=="NK cells",]
+NK_Rpert <- as.factor(Rpert[ct_DE$cell_type=="NK cells"])
+donor_id <- ct_DE_NK$donor_id
+plate_name <- ct_DE_NK$plate_name
+row <- ct_DE_NK$row
+
+counts <- data.frame(t(ct_DE_NK[,-(1:6)]))
+counts[counts<0] <- 0
+d0 <- DGEList(counts)
+d0 <- calcNormFactors(d0)
+
+mm <- model.matrix(~0+NK_Rpert+donor_id+plate_name+row)
+y <- voom(d0, mm, plot=TRUE)
+fit <- lmFit(y, mm)
+
+grp_NK <- colnames(coef(fit))[c(1,3:145)]
+result_ct_list_NK <- list()
+for (i in 1:length(grp_NK)){
+  contr <- makeContrasts(contrasts = paste0(grp_NK[i],"-","NK_Rpert2"), levels = colnames(coef(fit)))
+  tmp <- contrasts.fit(fit, contr)
+  tmp <- eBayes(tmp)
+  result_ct_list_NK[[i]] <- topTable(tmp,  n=Inf, sort='none')
+}
+
+```
+
+```{r,fig.height=10}
+## Some volcano plots
+for (i in 1: length(result_ct_list_B)){
+  df_temp <- data.frame(rownames(result_ct_list_B[[i]]),result_ct_list_B[[i]]$P.Value,result_ct_list_B[[i]]$logFC)
+  names(df_temp) <- c("gene_name","P.Val","logFC")
+  v <- EnhancedVolcano(df_temp,
+       lab = gene_name,
+       title = grp_B[i],
+       x = 'logFC',
+       y = 'P.Val',
+       pCutoff=0.05,
+       FCcutoff = 1,
+       ylim = c(0,max(-log10(df_temp$P.Val))+0.5))
+  print(v)
+}
+```
+
+```{r, fig.height=10}
+for (i in 1: length(result_list_Myeloid)){
+  df_temp <- data.frame(rownames(result_ct_list_Myeloid[[i]]),result_ct_list_Myeloid[[i]]$P.Value,result_ct_list_Myeloid[[i]]$logFC)
+  names(df_temp) <- c("gene_name","P.Val","logFC")
+  v <- EnhancedVolcano(df_temp,
+       lab = gene_name,
+       title = grp_NK[i],
+       x = 'logFC',
+       y = 'P.Val',
+       pCutoff=0.05,
+       FCcutoff = 1,
+       ylim = c(0,max(-log10(df_temp$P.Val))+0.5))
+  print(v)
+}
+```
+
+### Get DE result for pert model prediction
+
+```{r}
+pt_DE <- data.frame(rbind(control,pt_pred_full_temp[,-1]))
+
+pert <- unique(pt_DE$sm_name)
+Rpert_uni <- c(1:length(pert))
+
+Rpert <- c()
+for (i in 1:nrow(pt_DE)){
+  Rpert[i] <- Rpert_uni[which(pt_DE$sm_name[i]==pert)]
+}
+```
+
+```{r}
+## Use limma for DE analysis
+## B cell type
+pt_DE_B <- pt_DE[pt_DE$cell_type=="B cells",]
+B_Rpert <- as.factor(Rpert[pt_DE$cell_type=="B cells"])
+donor_id <- pt_DE_B$donor_id
+plate_name <- pt_DE_B$plate_name
+row <- pt_DE_B$row
+
+counts <- data.frame(t(pt_DE_B[,-(1:6)]))
+counts[counts<0] <- 0
+d0 <- DGEList(counts)
+d0 <- calcNormFactors(d0)
+
+mm <- model.matrix(~0+B_Rpert+donor_id+plate_name+row)
+y <- voom(d0, mm, plot=TRUE)
+fit <- lmFit(y, mm)
+
+grp_B <- colnames(coef(fit))[c(1,3:10)]
+result_pt_list_B <- list()
+for (i in 1:length(grp_B)){
+  contr <- makeContrasts(contrasts = paste0(grp_B[i],"-","B_Rpert2"), levels = colnames(coef(fit)))
+  tmp <- contrasts.fit(fit, contr)
+  tmp <- eBayes(tmp)
+  result_pt_list_B[[i]] <- topTable(tmp,  n=Inf, sort='none')
+}
+
+## Myeloid 
+
+pt_DE_Myeloid <- pt_DE[pt_DE$cell_type=="Myeloid cells",]
+Myeloid_Rpert <- as.factor(Rpert[pt_DE$cell_type=="Myeloid cells"])
+donor_id <- pt_DE_Myeloid$donor_id
+plate_name <- pt_DE_Myeloid$plate_name
+row <- pt_DE_Myeloid$row
+
+counts <- data.frame(t(pt_DE_Myeloid[,-(1:6)]))
+counts[counts<0] <- 0
+d0 <- DGEList(counts)
+d0 <- calcNormFactors(d0)
+
+mm <- model.matrix(~0+Myeloid_Rpert+donor_id+plate_name+row)
+y <- voom(d0, mm, plot=TRUE)
+fit <- lmFit(y, mm)
+
+grp_Myeloid <- colnames(coef(fit))[c(1,3:7)]
+result_pt_list_Myeloid <- list()
+for (i in 1:length(grp_Myeloid)){
+  contr <- makeContrasts(contrasts = paste0(grp_Myeloid[i],"-","Myeloid_Rpert2"), levels = colnames(coef(fit)))
+  tmp <- contrasts.fit(fit, contr)
+  tmp <- eBayes(tmp)
+  result_pt_list_Myeloid[[i]] <- topTable(tmp,  n=Inf, sort='none')
+}
+
+## NK
+
+ct_DE_NK <- ct_DE[ct_DE$cell_type=="NK cells",]
+NK_Rpert <- as.factor(Rpert[ct_DE$cell_type=="NK cells"])
+donor_id <- ct_DE_NK$donor_id
+plate_name <- ct_DE_NK$plate_name
+row <- ct_DE_NK$row
+
+counts <- data.frame(t(ct_DE_NK[,-(1:6)]))
+counts[counts<0] <- 0
+d0 <- DGEList(counts)
+d0 <- calcNormFactors(d0)
+
+mm <- model.matrix(~0+NK_Rpert+donor_id+plate_name+row)
+y <- voom(d0, mm, plot=TRUE)
+fit <- lmFit(y, mm)
+
+grp_NK <- colnames(coef(fit))[c(1,3:145)]
+result_list_NK <- list()
+for (i in 1:length(grp_NK)){
+  contr <- makeContrasts(contrasts = paste0(grp_NK[i],"-","NK_Rpert2"), levels = colnames(coef(fit)))
+  tmp <- contrasts.fit(fit, contr)
+  tmp <- eBayes(tmp)
+  result_list_NK[[i]] <- topTable(tmp,  n=Inf, sort='none')
+}
+
+```
+
+```{r,fig.height=10}
+## Some volcano plots
+for (i in 1: length(result_list_B)){
+  df_temp <- data.frame(rownames(result_list_B[[i]]),result_list_B[[i]]$P.Value,result_list_B[[i]]$logFC)
+  names(df_temp) <- c("gene_name","P.Val","logFC")
+  v <- EnhancedVolcano(df_temp,
+       lab = gene_name,
+       title = grp_B[i],
+       x = 'logFC',
+       y = 'P.Val',
+       pCutoff=0.05,
+       FCcutoff = 1,
+       ylim = c(0,max(-log10(df_temp$P.Val))+0.5))
+  print(v)
+}
+```
+
+```{r, fig.height=10}
+for (i in 1: length(result_pt_list_Myeloid)){
+  df_temp <- data.frame(rownames(result_pt_list_Myeloid[[i]]),result_pt_list_Myeloid[[i]]$P.Value,result_pt_list_Myeloid[[i]]$logFC)
+  names(df_temp) <- c("gene_name","P.Val","logFC")
+  v <- EnhancedVolcano(df_temp,
+       lab = gene_name,
+       title = grp_NK[i],
+       x = 'logFC',
+       y = 'P.Val',
+       pCutoff=0.05,
+       FCcutoff = 1,
+       ylim = c(0,max(-log10(df_temp$P.Val))+0.5))
+  print(v)
 }
 ```
