@@ -51,6 +51,7 @@ library(kableExtra)
 library(cmapR)
 library(edgeR)
 library(arrow)
+library(latex2exp)
 ```
 
 ## Input bulked data
@@ -1087,6 +1088,7 @@ for (i in cell_type_name){
     tmp <- contrasts.fit(fit, contr)
     tmp <- eBayes(tmp)
     result_ct_list[[j]] <- topTable(tmp,  n=Inf, sort='none')
+    names(result_ct_list)[[j]] <- grp_temp[j]
   }
   DE_ct_result[[i]] <- result_ct_list
 
@@ -1190,8 +1192,8 @@ for (i in cell_type_name){
 
 ```{r,fig.height=10}
 ## Some volcano plots
-for (i in 1: length(DE_ct_result[[1]])){
-  df_temp <- data.frame(rownames(DE_ct_result[[1]][[i]]),DE_ct_result[[1]][[i]]$P.Value,DE_ct_result[[1]][[i]]$logFC)
+for (i in 1: length(DE_sia_result[[5]])){
+  df_temp <- data.frame(rownames(DE_sia_result[[5]][[i]]),DE_sia_result[[5]][[i]]$P.Value,DE_sia_result[[5]][[i]]$logFC)
   names(df_temp) <- c("gene_name","P.Val","logFC")
   v <- EnhancedVolcano(df_temp,
        lab = gene_name,
@@ -1244,6 +1246,12 @@ for (i in 1: length(result_ct_list_NK)){
 ```{r}
 mthd <- c("cell type", "perturbation","two-factor","SIA")
 r2 <- c(mean(r2_ct),mean(r2_pt),mean(r2_tf),mean(r2_sia,na.rm = TRUE))
+r2 <- round(r2,2)
+dt <- data.frame(mthd,r2)
+
+p3 <- ggplot(dt, aes(y=r2, x=mthd)) + geom_bar(position = "dodge", stat="identity", fill="blue")+geom_text(aes(label = r2),position = position_dodge(width = 0.9), vjust=-0.3)+xlab("Model")+ylab(TeX("$R^2$")) +ylim(c(0,1))
+p3
+
 ```
 
 ### In vitro DEG vs predicted DEG
