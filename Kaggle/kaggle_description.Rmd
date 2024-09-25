@@ -1,0 +1,90 @@
+---
+title: "Kaggle_description"
+author: "Hongxu Zhu"
+always_allow_html: yes
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    theme: united
+    toc: yes
+    toc_collapsed: yes
+    toc_float: yes
+---
+
+```{r alternative-preambles,echo=FALSE,include=FALSE,eval=FALSE}
+## if using word replace output with
+output:
+  word_document:
+    toc: yes
+
+## if using pdf replace output with
+output:
+  pdf_document:
+    toc: yes
+header-includes:
+  - \usepackage{xcolor}
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+## colorizes text when using html or pdf output
+## just spits out text x for word
+colorize <- function(x, color) {
+  if(color=="todo"){
+    color <- "red"
+    x <- paste0("TODO: ",x)
+  }
+  if (knitr::is_latex_output()) {
+    sprintf("\\textcolor{%s}{%s}", color, x)
+  } else if (knitr::is_html_output()) {
+    sprintf("<span style='color: %s;'>%s</span>", color, 
+      x)
+  } else x
+}
+
+todo <- function(x){
+  paste0("**",colorize(x,"todo"),"**")
+}
+
+library(kableExtra)
+library(cmapR)
+library(edgeR)
+library(arrow)
+```
+
+## Data Description
+
+Let $y^{ca}_{ijkl}$ denote a single cell expression sample. Here, $(c,a)$ represents a unique context action pair, $i\in\{1,2,3\}$ is the indicator of donor, $j\in\{1,2,...,6\}$ indicates the plate, $k\in\{1,2,...,16\}$ indicates the row on the plate, while $l$ indicates the single cell sample. Notices that, the action (perturbation) $a$ is associates with the well of the plate. Every donor was assigned for 2 plates. For the first 3 columns on each plate, every row was applied by the same perturbation. While the first column was applied by DMSO (control), column 2 and 3 were applied by positive controls. In the rest of wells on the two plates , each well was applied by one specific perturbation. For every well, there are single cell samples of every cell type.
+
+Given the setting of the experiments, 
+
+## Pseudo-bulking
+
+In this experiment setting, Pseudo-bulking was performed using sum aggregation for each cell type under a specific group defined by $\{ijk\}$. Denote The pseudo-bulked level expression as $y^{ca}_{ijk\cdot}$. This procedure could be written as
+
+$$y^{ca}_{ijk\cdot}=\sum_{l=1}^{n^c_{ijk}}y^{ca}_{ijkl}$$ 
+
+where $n^c_{ijk}$ is the total number of cell samples in group $\{ijk\}$ for context $c$. In the ideal case, for this experiment setting, we will have:
+
+48 pseudo-bulked level samples for each control pair;
+
+3 pseudo-bulked level samples for each perturbed pair.
+
+However, due to certain practical issues, we end up have less pseudo-bulked level samples for some $\{c,a\}$ pair.
+
+## In vitro DEG
+
+In vitro DEG was performed using linear model by Limma. To simplify the notation, let $g^c_{ij}$ denote the pseudo-bulked expression for $i$th sample of gene $j$ under context $c$. Then, the linear model could be written as
+
+$$g^c_{ij}=\beta_{0j}^c+\beta_{1j}^ca_i+\beta_{2j}^cd_i+\beta_{3j}^cp_i+\beta_{4j}^cr_i+\varepsilon_{ij}$$
+
+where $a$ is the indicator of action (perturbation), $d$ is the indicator of donor, $p$ is the indicator of plate, $r$ is the indicator of row. By fitting the linear model, the p-values are calculated based on the significance of model parameters.
+
+## Fitting in silico models
+
+We will fit benchmark models and SIA on the pseudo-bulked level expressions. All the models will return the predicted mean expressions rather than the distribution. 
+
+Plan: fit model separately on each group.
+
+
