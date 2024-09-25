@@ -47,10 +47,10 @@ todo <- function(x){
   paste0("**",colorize(x,"todo"),"**")
 }
 
-library(kableExtra)
-library(cmapR)
-library(edgeR)
-library(arrow)
+#library(kableExtra)
+#library(cmapR)
+#library(edgeR)
+#library(arrow)
 ```
 
 ## Data Description
