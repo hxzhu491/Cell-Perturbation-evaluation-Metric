@@ -1062,6 +1062,7 @@ for (i in 1:nrow(ct_DE)){
 ```
 
 ```{r}
+library(data.table)
 ## Use limma for DE analysis
 
 ## cell type model prediction
@@ -1197,7 +1198,7 @@ for (i in 1: length(DE_sia_result[[5]])){
   names(df_temp) <- c("gene_name","P.Val","logFC")
   v <- EnhancedVolcano(df_temp,
        lab = gene_name,
-       title = grp_B[i],
+       title = " ",
        x = 'logFC',
        y = 'P.Val',
        pCutoff=0.05,
@@ -1213,23 +1214,7 @@ for (i in 1: length(DE_sia_result[[1]])){
   names(df_temp) <- c("gene_name","P.Val","logFC")
   v <- EnhancedVolcano(df_temp,
        lab = gene_name,
-       title = grp_B[i],
-       x = 'logFC',
-       y = 'P.Val',
-       pCutoff=0.05,
-       FCcutoff = 1,
-       ylim = c(0,max(-log10(df_temp$P.Val))+0.5))
-  print(v)
-}
-```
-
-```{r, fig.height=10}
-for (i in 1: length(result_ct_list_NK)){
-  df_temp <- data.frame(rownames(result_ct_list_NK[[i]]),result_ct_list_NK[[i]]$P.Value,result_ct_list_NK[[i]]$logFC)
-  names(df_temp) <- c("gene_name","P.Val","logFC")
-  v <- EnhancedVolcano(df_temp,
-       lab = gene_name,
-       title = grp_NK[i],
+       title = " ",
        x = 'logFC',
        y = 'P.Val',
        pCutoff=0.05,
@@ -1257,20 +1242,240 @@ p3
 ### In vitro DEG vs predicted DEG
 
 ```{r}
-cell_type <- c()
-sm_name <- c()
+## Get cell type and perturbation names in DE results
+
+cell_type_vec <- c()
+Rpert_vec <- c()
 for (i in 1:length(DE_ct_result)){
-  cell_type
+  cell_type_vec <- c(cell_type_vec,rep(names(DE_ct_result)[i],length(DE_ct_result[[i]])))
+  Rpert_vec <- c(Rpert_vec,names(DE_ct_result[[i]]))
 }
+
+Rpert_index <- as.numeric(sub(".*temp","",Rpert_vec))
+
+pert_comp <- data.frame(pert,Rpert_uni)
+pert_vec <- c()
+for (i in 1:length(Rpert_index)){
+  pert_vec[i] <- pert[Rpert_uni==Rpert_index[i]]
+}
+
+test_cmb <- data.frame(cell_type_vec,pert_vec)
+names(test_cmb) <- c("cell_type","sm_name")
+
+## Get p value and lfc from DE_results
+## For 4 methods
+DE_ct_p <- data.frame()
+for (i in 1: length(DE_ct_result)){
+  temp <- DE_ct_result[[i]]
+  for (j in 1:length(temp)){
+    DE_ct_p <- data.frame(rbind(DE_ct_p,as.vector(temp[[j]]$P.Value)))
+  }
+}
+names(DE_ct_p) <- gene_name
+
+DE_ct_lfc <- data.frame()
+for (i in 1: length(DE_ct_result)){
+  temp <- DE_ct_result[[i]]
+  for (j in 1:length(temp)){
+    DE_ct_lfc <- data.frame(rbind(DE_ct_lfc,as.vector(temp[[j]]$logFC)))
+  }
+}
+names(DE_ct_lfc) <- gene_name
+
+#####
+
+DE_pt_p <- data.frame()
+for (i in 1: length(DE_pt_result)){
+  temp <- DE_pt_result[[i]]
+  for (j in 1:length(temp)){
+    DE_pt_p <- data.frame(rbind(DE_pt_p,as.vector(temp[[j]]$P.Value)))
+  }
+}
+names(DE_pt_p) <- gene_name
+
+DE_pt_lfc <- data.frame()
+for (i in 1: length(DE_pt_result)){
+  temp <- DE_pt_result[[i]]
+  for (j in 1:length(temp)){
+    DE_pt_lfc <- data.frame(rbind(DE_pt_lfc,as.vector(temp[[j]]$logFC)))
+  }
+}
+names(DE_pt_lfc) <- gene_name
+
+#####
+
+DE_tf_p <- data.frame()
+for (i in 1: length(DE_tf_result)){
+  temp <- DE_tf_result[[i]]
+  for (j in 1:length(temp)){
+    DE_tf_p <- data.frame(rbind(DE_tf_p,as.vector(temp[[j]]$P.Value)))
+  }
+}
+names(DE_tf_p) <- gene_name
+
+DE_tf_lfc <- data.frame()
+for (i in 1: length(DE_tf_result)){
+  temp <- DE_tf_result[[i]]
+  for (j in 1:length(temp)){
+    DE_tf_lfc <- data.frame(rbind(DE_tf_lfc,as.vector(temp[[j]]$logFC)))
+  }
+}
+names(DE_tf_lfc) <- gene_name
+
+#####
+
+DE_sia_p <- data.frame()
+for (i in 1: length(DE_sia_result)){
+  temp <- DE_sia_result[[i]]
+  for (j in 1:length(temp)){
+    DE_sia_p <- data.frame(rbind(DE_sia_p,as.vector(temp[[j]]$P.Value)))
+  }
+}
+names(DE_sia_p) <- gene_name
+
+DE_sia_lfc <- data.frame()
+for (i in 1: length(DE_sia_result)){
+  temp <- DE_sia_result[[i]]
+  for (j in 1:length(temp)){
+    DE_sia_lfc <- data.frame(rbind(DE_sia_lfc,as.vector(temp[[j]]$logFC)))
+  }
+}
+names(DE_sia_lfc) <- gene_name
+```
+
+#### In Vitro DEG's
+
+```{r}
+test_cmb_ix <- test_cmb[test_cmb$sm_name!="Dabrafenib" & test_cmb$sm_name!="Belinostat",]
 ```
 
 ```{r}
-for (i in 1:nrow(pairs_test)){
-  ix <- DE_p_value_df$cell_type==pairs_test$cell_type[i] & DE_p_value_df$sm_name==pairs_test$sm_name[i]
-  p_iv <- DE_p_value_df[ix,]
-  lfc_iv <- DE_lfc[ix,]
+DEG_iv <- list()
+for (i in 1:nrow(test_cmb_ix)){
+  ix <- DE_p_value_df$cell_type==test_cmb_ix$cell_type[i] & DE_p_value_df$sm_name==test_cmb_ix$sm_name[i]
+  temp1 <- DE_p_value_df[ix,-c(1,2)]
+  temp2 <- DE_lfc_df[ix,-c(1,2)]
+  DEG_iv[[i]] <- gene_name[temp1<0.05 & abs(temp2)>1]
 }
 ```
 
+#### Predicted DEG's
 
+```{r}
+DE_ct_p_ix <- DE_ct_p[test_cmb$sm_name!="Dabrafenib" & test_cmb$sm_name!="Belinostat",]
+DE_ct_lfc_ix <- DE_ct_lfc[test_cmb$sm_name!="Dabrafenib" & test_cmb$sm_name!="Belinostat",]
+DE_pt_p_ix <- DE_pt_p[test_cmb$sm_name!="Dabrafenib" & test_cmb$sm_name!="Belinostat",]
+DE_pt_lfc_ix <- DE_pt_lfc[test_cmb$sm_name!="Dabrafenib" & test_cmb$sm_name!="Belinostat",]
+DE_tf_p_ix <- DE_tf_p[test_cmb$sm_name!="Dabrafenib" & test_cmb$sm_name!="Belinostat",]
+DE_tf_lfc_ix <- DE_tf_lfc[test_cmb$sm_name!="Dabrafenib" & test_cmb$sm_name!="Belinostat",]
+DE_sia_p_ix <- DE_sia_p[test_cmb$sm_name!="Dabrafenib" & test_cmb$sm_name!="Belinostat",]
+DE_sia_lfc_ix <- DE_sia_lfc[test_cmb$sm_name!="Dabrafenib" & test_cmb$sm_name!="Belinostat",]
+```
+
+```{r}
+DEG_ct <- list()
+for (i in 1:nrow(test_cmb_ix)){
+  temp1 <- DE_ct_p_ix[i,]
+  temp2 <- DE_ct_lfc_ix[i,]
+  DEG_ct[[i]] <- gene_name[temp1<0.05 & abs(temp2)>1]
+}
+
+DEG_pt <- list()
+for (i in 1:nrow(test_cmb_ix)){
+  temp1 <- DE_pt_p_ix[i,]
+  temp2 <- DE_pt_lfc_ix[i,]
+  DEG_pt[[i]] <- gene_name[temp1<0.05 & abs(temp2)>1]
+}
+
+DEG_tf <- list()
+for (i in 1:nrow(test_cmb_ix)){
+  temp1 <- DE_tf_p_ix[i,]
+  temp2 <- DE_tf_lfc_ix[i,]
+  DEG_tf[[i]] <- gene_name[temp1<0.05 & abs(temp2)>1]
+}
+
+DEG_sia <- list()
+for (i in 1:nrow(test_cmb_ix)){
+  temp1 <- DE_sia_p_ix[i,]
+  temp2 <- DE_sia_lfc_ix[i,]
+  DEG_sia[[i]] <- gene_name[temp1<0.05 & abs(temp2)>1]
+}
+```
+
+#### Predicted scores
+
+```{r}
+score_ct <- list()
+for (i in 1: nrow(test_cmb_ix)){
+  temp1 <- DE_ct_p_ix[i,]
+  temp1 <- ifelse(temp1>=0.05,0,1)
+  temp2 <- DE_ct_lfc_ix[i,]
+  score_ct[[i]] <- temp1*abs(temp2)
+}
+
+score_pt <- list()
+for (i in 1: nrow(test_cmb_ix)){
+  temp1 <- DE_pt_p_ix[i,]
+  temp1 <- ifelse(temp1>=0.05,0,1)
+  temp2 <- DE_pt_lfc_ix[i,]
+  score_pt[[i]] <- temp1*abs(temp2)
+}
+
+score_tf <- list()
+for (i in 1: nrow(test_cmb_ix)){
+  temp1 <- DE_tf_p_ix[i,]
+  temp1 <- ifelse(temp1>=0.05,0,1)
+  temp2 <- DE_tf_lfc_ix[i,]
+  score_tf[[i]] <- temp1*abs(temp2)
+}
+
+score_sia <- list()
+for (i in 1: nrow(test_cmb_ix)){
+  temp1 <- DE_sia_p_ix[i,]
+  temp1 <- ifelse(temp1>=0.05,0,1)
+  temp2 <- DE_sia_lfc_ix[i,]
+  score_sia[[i]] <- temp1*abs(temp2)
+}
+```
+
+#### Calculate PR-AUC and generate PR curves
+
+```{r}
+library(ggplot2)
+library(yardstick)
+library(dplyr)
+pr_auc_ct <- c()
+pr_auc_pt <- c()
+pr_auc_tf <- c()
+pr_auc_sia <- c()
+pr_curve <- list()
+for (i in 1: nrow(test_cmb_ix)){
+  true <- rep(0,length(gene_name))
+  true[which(gene_name %in% DEG_iv[[i]])] <- 1
+  dt <- data.frame(as.factor(true),t(score_ct[[i]]))
+  names(dt) <- c("true","score")
+  dt2 <- data.frame(as.factor(true),t(score_pt[[i]]))
+  names(dt2) <- c("true","score")
+  dt3 <- data.frame(as.factor(true),t(score_tf[[i]]))
+  names(dt3) <- c("true","score")
+  dt4 <- data.frame(as.factor(true),t(score_sia[[i]]))
+  names(dt4) <- c("true","score")
+  dtf <- rbind(dt,dt2,dt3,dt4)
+  method <- c(rep("cell_type",nrow(dt)),rep("perturbation",nrow(dt2)),rep("two-factor",nrow(dt3)),rep("sia",nrow(dt4)))
+  dtf <- data.frame(dtf,method)
+  pr_auc_ct[i] <- as.numeric(pr_auc(dt, true, score, event_level = "second")[3])
+  pr_auc_pt[i] <- as.numeric(pr_auc(dt2, true, score, event_level = "second")[3])
+  pr_auc_tf[i] <- as.numeric(pr_auc(dt3, true, score, event_level = "second")[3])
+  pr_auc_sia[i] <- as.numeric(pr_auc(dt4, true, score, event_level = "second")[3])
+  pr_curve[[i]] <- dtf %>%
+         group_by(method) %>%
+         pr_curve(true, score, event_level = "second") %>%
+         ggplot(aes(x = recall, y = precision, color=method)) +
+         geom_path() +
+         coord_equal() +
+         theme_bw()+
+         ggtitle(paste0(test_cmb_ix$cell_type[i],"_",test_cmb_ix$sm_name[i]))
+         print(pr_curve[[i]])
+}
+```
 
