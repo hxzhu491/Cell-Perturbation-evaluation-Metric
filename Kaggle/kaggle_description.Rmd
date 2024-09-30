@@ -55,23 +55,71 @@ todo <- function(x){
 
 ## Data Description
 
-Let $y^{ca}_{ijkl}$ denote a single cell expression sample. Here, $(c,a)$ represents a unique context action pair, $i\in\{1,2,3\}$ is the indicator of donor, $j\in\{1,2,...,6\}$ indicates the plate, $k\in\{1,2,...,16\}$ indicates the row on the plate, while $l$ indicates the single cell sample. Notices that, the action (perturbation) $a$ is associates with the well of the plate. Every donor was assigned for 2 plates. For the first 3 columns on each plate, every row was applied by the same perturbation. While the first column was applied by DMSO (control), column 2 and 3 were applied by positive controls. In the rest of wells on the two plates , each well was applied by one specific perturbation. For every well, there are single cell samples of every cell type.
+Let $y^{ca}_{ijkl}\in R^p$ denote a single cell expression sample. Here, $(c,a)$ represents a unique context action pair, $i\in\{0,1,2\}$ is the indicator of donor, $j\in\{0,1,...,5\}$ indicates the plate, $k\in\{A,B,...,H\}$ indicates the row on the plate, while $l$ indicates the single cell sample. We may refer the subscriptions $\{ijk\}$ as the indicator of "location" for a $(c,a)$ pair. Notice that, the location indicators are not independent. The plate indicator $j$ is associated with the donor indicator $i$. In this data set, $j|i=0 \in \{0,2\}$, $j|i=1\in\{3,5\}$ and $j|i=2\in\{1,4\}$. For every location defined by $\{ijk\}$, experiments were applied on every cell type.  
 
-Given the setting of the experiments, 
+### Control experiments
+
+In this experiment, the first 3 columns for every plate are assigned for control experiments (DMSO, Dabrafenib and Belinostat). Thus, for a given control action for donor $i\in\{0,1,2\}$, there will be 16 possible locations for this control action. For example, let's denote DMSO as $a_0$, then, the samples for $\{ca_0\}$ for donor 0 could be written as $y^{ca_0}_{ijkl}$ where $i=0, j\in\{0,2\},k\in\{A,B,...,H\}$. The total number of possible location would be $2\times 8=16$.
+
+### Perturbation experiments
+
+For every donor $i\in\{0,1,2\}$, each perturbation action is applied in one of the remaining wells (wells that not for control experiments) in the two plates assigned for the donor. Thus, for a given perturbation action $a$, when $i$ is determined, there will be only one possible combination of $j$ and $k$, which results in 3 possible locations for this action. 
 
 ## Pseudo-bulking
 
-In this experiment setting, Pseudo-bulking was performed using sum aggregation for each cell type under a specific group defined by $\{ijk\}$. Denote The pseudo-bulked level expression as $y^{ca}_{ijk\cdot}$. This procedure could be written as
+Pseudo-bulking was performed using sum aggregation for each cell type under a specific group defined by the location indicator $\{ijk\}$. Denote The pseudo-bulked level expression as $\tilde{y}^{ca}_{ijk}$. This procedure could be written as
 
-$$y^{ca}_{ijk\cdot}=\sum_{l=1}^{n^c_{ijk}}y^{ca}_{ijkl}$$ 
+$$\tilde{y}^{ca}_{ijk}=\sum_{l=1}^{n^{ca}_{ijk}}y^{ca}_{ijkl}$$ 
 
-where $n^c_{ijk}$ is the total number of cell samples in group $\{ijk\}$ for context $c$. In the ideal case, for this experiment setting, we will have:
+where $n^{ca}_{ijk}$ is the total number of single cell samples in group $\{ijk\}$ for a context-action pair $(c,a)$. After pseudo-bulking, we get 48 pseudo-bulked level samples for each control pair and 3 pseudo-bulked level samples for each perturbed pair. However, due to certain practical issues (e.g. no results for certain cell types in a well), we end up have less pseudo-bulked level samples for some $(c,a)$ pair.
 
-48 pseudo-bulked level samples for each control pair;
+## Data visibility and pre-processing
 
-3 pseudo-bulked level samples for each perturbed pair.
+We cannot observe the experiment results for all the $(c,a)$ pairs. These experiment results were masked by the organizer. The detail of this could be viewed in the heatmap. For the remaining observed experiment results, we conduct the following cleaning process:
 
-However, due to certain practical issues, we end up have less pseudo-bulked level samples for some $\{c,a\}$ pair.
+1. Separate the dataset into control and perturbed
+
+2. No further processing on the control data
+
+3. For a perturbed context-action pair $(c,a)$, if the number of total samples is less than 3, remove the pair from the dataset. This process removes about 50 pairs from the dataset.
+
+ 
+## Training and testing split
+
+After the pseudo-bulking and the pre-processing, we have a remaining dataset with 548 perturbed $(c,a)$ pairs. All these pairs have 3 samples that indicated by the location indicator $\{ijk\}$. We split the dataset into training and testing based on the $(c,a)$ pairs: among all the $(c,a)$ pairs in the dataset, we randomly select 100 $(c,a)$ pairs as the testing pairs, the remaining 448 pairs are in the training pairs.
+
+The result of the split returns:
+
+training set: 448 perturbed $(c,a)$ pairs, each pair has 3 samples + control pairs
+
+testing set: 100 perturbed $(c,a)$ pairs
+
+## Fit in silico models
+
+We fit in silico models separately for each donor. (We need to consider the effect of covariates in the model, however, donor is highly correlated with plate).
+
+Cell type model: 
+
+$$Y^i=\beta_0^i+\beta_C^iC^i+\beta_P^iP^i+\beta_R^iR^i+\varepsilon^i$$
+
+where $i\in\{1,2,3\}$, $C$ is the context (cell type), $P$ is the plate $R$ is the row.
+
+Perturbation model:
+
+$$Y^i=\beta_0^i+\beta_A^iA^i+\beta_P^iP^i+\beta_R^iR^i+\varepsilon^i$$
+$A$ is the action (perturbation).
+
+Two-factor model:
+
+$$Y^i=\beta_0^i+\beta_C^iC^i+\beta_A^iA^i+\beta_P^iP^i+\beta_R^iR^i+\varepsilon^i$$
+SIA:
+
+1. For each donor, remove plate effect and row effect.
+
+2. Fit SIA, get prediction.
+
+3. add back batch effects, get final prediction.
+
 
 ## In vitro DEG
 
@@ -81,10 +129,9 @@ $$g^c_{ij}=\beta_{0j}^c+\beta_{1j}^ca_i+\beta_{2j}^cd_i+\beta_{3j}^cp_i+\beta_{4
 
 where $a$ is the indicator of action (perturbation), $d$ is the indicator of donor, $p$ is the indicator of plate, $r$ is the indicator of row. By fitting the linear model, the p-values are calculated based on the significance of model parameters.
 
-## Fitting in silico models
 
-We will fit benchmark models and SIA on the pseudo-bulked level expressions. All the models will return the predicted mean expressions rather than the distribution. 
 
-Plan: fit model separately on each group.
+
+
 
 
