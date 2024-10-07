@@ -544,7 +544,7 @@ d2_test_X <- bulk_X_d2[row.names(bulk_X_d2) %in% index,]
 ```{r}
 ## for d0
 
-fit <- lm(as.matrix(bulk_X_d0) ~ bulk_meta_d0$cell_type, x=TRUE)
+fit <- lm(as.matrix(bulk_X_d0) ~ bulk_meta_d0$cell_type + bulk_meta_d0$plate_name + bulk_meta_d0$row, x=TRUE)
 
 index_test <- c()
 for (i in 1: nrow(pairs_test)){
@@ -566,7 +566,7 @@ pred_ct_d0 <- data.frame(pred_ct_d0)
 
 ## for d1
 
-fit <- lm(as.matrix(bulk_X_d1) ~ bulk_meta_d1$cell_type, x=TRUE)
+fit <- lm(as.matrix(bulk_X_d1) ~ bulk_meta_d1$cell_type + bulk_meta_d1$plate_name + bulk_meta_d1$row, x=TRUE)
 
 index_test <- c()
 for (i in 1: nrow(pairs_test)){
@@ -588,7 +588,7 @@ pred_ct_d1 <- data.frame(pred_ct_d1)
 
 ## for d2
 
-fit <- lm(as.matrix(bulk_X_d2) ~ bulk_meta_d2$cell_type, x=TRUE)
+fit <- lm(as.matrix(bulk_X_d2) ~ bulk_meta_d2$cell_type + bulk_meta_d2$plate_name + bulk_meta_d2$row, x=TRUE)
 
 index_test <- c()
 for (i in 1: nrow(pairs_test)){
@@ -623,7 +623,7 @@ ct_pred_full <- data.frame(rbind(ct_pred_full_d0,ct_pred_full_d1,ct_pred_full_d2
 ```{r}
 ## for d0
 
-fit <- lm(as.matrix(bulk_X_d0) ~ bulk_meta_d0$sm_name, x=TRUE)
+fit <- lm(as.matrix(bulk_X_d0) ~ bulk_meta_d0$sm_name+ bulk_meta_d0$plate_name + bulk_meta_d0$row, x=TRUE)
 
 index_test <- c()
 for (i in 1: nrow(pairs_test)){
@@ -648,7 +648,7 @@ pred_pt_d0 <- data.frame(pred_pt_d0)
 
 ## for d1
 
-fit <- lm(as.matrix(bulk_X_d1) ~ bulk_meta_d1$sm_name, x=TRUE)
+fit <- lm(as.matrix(bulk_X_d1) ~ bulk_meta_d1$sm_name+ bulk_meta_d1$plate_name + bulk_meta_d1$row, x=TRUE)
 
 index_test <- c()
 for (i in 1: nrow(pairs_test)){
@@ -673,7 +673,7 @@ pred_pt_d1 <- data.frame(pred_pt_d1)
 
 ## for d2
 
-fit <- lm(as.matrix(bulk_X_d2) ~ bulk_meta_d2$sm_name, x=TRUE)
+fit <- lm(as.matrix(bulk_X_d2) ~ bulk_meta_d2$sm_name+ bulk_meta_d2$plate_name + bulk_meta_d2$row, x=TRUE)
 
 index_test <- c()
 for (i in 1: nrow(pairs_test)){
@@ -710,7 +710,7 @@ pt_pred_full <- data.frame(rbind(pt_pred_full_d0,pt_pred_full_d1,pt_pred_full_d2
 ```{r}
 ## for d0
 
-fit <- lm(as.matrix(bulk_X_d0) ~ bulk_meta_d0$sm_name + bulk_meta_d0$cell_type, x=TRUE)
+fit <- lm(as.matrix(bulk_X_d0) ~ bulk_meta_d0$sm_name + bulk_meta_d0$cell_type+ bulk_meta_d0$plate_name + bulk_meta_d0$row, x=TRUE)
 
 index_test <- c()
 for (i in 1: nrow(pairs_test)){
@@ -735,7 +735,7 @@ pred_tf_d0 <- data.frame(pred_tf_d0)
 
 ## for d1
 
-fit <- lm(as.matrix(bulk_X_d1) ~ bulk_meta_d1$sm_name+bulk_meta_d1$cell_type, x=TRUE)
+fit <- lm(as.matrix(bulk_X_d1) ~ bulk_meta_d1$sm_name+bulk_meta_d1$cell_type+ bulk_meta_d1$plate_name + bulk_meta_d1$row, x=TRUE)
 
 index_test <- c()
 for (i in 1: nrow(pairs_test)){
@@ -760,7 +760,7 @@ pred_tf_d1 <- data.frame(pred_tf_d1)
 
 ## for d2
 
-fit <- lm(as.matrix(bulk_X_d2) ~ bulk_meta_d2$sm_name+bulk_meta_d2$cell_type, x=TRUE)
+fit <- lm(as.matrix(bulk_X_d2) ~ bulk_meta_d2$sm_name+bulk_meta_d2$cell_type+ bulk_meta_d2$plate_name + bulk_meta_d2$row, x=TRUE)
 
 index_test <- c()
 for (i in 1: nrow(pairs_test)){
@@ -873,24 +873,166 @@ sia_lm <- function(a.donor.sub, c.train, data, y){
 ```
 
 ```{r}
-d0_full <- data.frame(bulk_meta_d0,bulk_X_d0)
+### batch effect removal for SIA
+
+fit0 <- lm(as.matrix(bulk_X_d0) ~ bulk_meta_d0$sm_name + bulk_meta_d0$cell_type+ bulk_meta_d0$plate_name + bulk_meta_d0$row, x=TRUE)
+
+index_test <- c()
+for (i in 1: nrow(pairs_test)){
+  ix <- bulk_meta_d0$cell_type==pairs_test$cell_type[i] & bulk_meta_d0$sm_name==pairs_test$sm_name[i]
+  index_test[i] <- row.names(bulk_meta_d0[ix,])
+}
+
+obs_test <- fit0$x[row.names(bulk_X_d0) %in% index_test,]
+obs_train <- fit0$x[!(row.names(bulk_X_d0) %in% index_test),]
+
+X_test <- as.matrix(bulk_X_d0[row.names(bulk_X_d0) %in% index_test,]) 
+X_train <- as.matrix(bulk_X_d0[!(row.names(bulk_X_d0) %in% index_test),])
+
+fit0.x <- lm.fit(obs_train,X_train)
+
+coef_pl2 <- fit0.x$coefficients[152,]
+coef_rB <- fit0.x$coefficients[153,]
+coef_rC <- fit0.x$coefficients[154,]
+coef_rD <- fit0.x$coefficients[155,]
+coef_rE <- fit0.x$coefficients[156,]
+coef_rF <- fit0.x$coefficients[157,]
+coef_rG <- fit0.x$coefficients[158,]
+coef_rH <- fit0.x$coefficients[159,]
+
+bulk_X_d0_sia <- bulk_X_d0
+bulk_X_d0_sia[bulk_meta_d0$plate_name=="plate_2",] <- bulk_X_d0_sia[bulk_meta_d0$plate_name=="plate_2",]-coef_pl2
+bulk_X_d0_sia[bulk_meta_d0$row=="B",] <- bulk_X_d0_sia[bulk_meta_d0$row=="B",]-coef_rB
+bulk_X_d0_sia[bulk_meta_d0$row=="C",] <- bulk_X_d0_sia[bulk_meta_d0$row=="C",]-coef_rC
+bulk_X_d0_sia[bulk_meta_d0$row=="D",] <- bulk_X_d0_sia[bulk_meta_d0$row=="D",]-coef_rD
+bulk_X_d0_sia[bulk_meta_d0$row=="E",] <- bulk_X_d0_sia[bulk_meta_d0$row=="E",]-coef_rE
+bulk_X_d0_sia[bulk_meta_d0$row=="F",] <- bulk_X_d0_sia[bulk_meta_d0$row=="F",]-coef_rF
+bulk_X_d0_sia[bulk_meta_d0$row=="G",] <- bulk_X_d0_sia[bulk_meta_d0$row=="G",]-coef_rG
+bulk_X_d0_sia[bulk_meta_d0$row=="H",] <- bulk_X_d0_sia[bulk_meta_d0$row=="H",]-coef_rH
+
+#############
+
+fit1 <- lm(as.matrix(bulk_X_d1) ~ bulk_meta_d1$sm_name + bulk_meta_d1$cell_type+ bulk_meta_d1$plate_name + bulk_meta_d1$row, x=TRUE)
+
+index_test <- c()
+for (i in 1: nrow(pairs_test)){
+  ix <- bulk_meta_d1$cell_type==pairs_test$cell_type[i] & bulk_meta_d1$sm_name==pairs_test$sm_name[i]
+  index_test[i] <- row.names(bulk_meta_d1[ix,])
+}
+
+obs_test <- fit1$x[row.names(bulk_X_d1) %in% index_test,]
+obs_train <- fit1$x[!(row.names(bulk_X_d1) %in% index_test),]
+
+X_test <- as.matrix(bulk_X_d1[row.names(bulk_X_d1) %in% index_test,]) 
+X_train <- as.matrix(bulk_X_d1[!(row.names(bulk_X_d1) %in% index_test),])
+
+fit1.x <- lm.fit(obs_train,X_train)
+
+coef_pl5 <- fit1.x$coefficients[152,]
+coef_rB <- fit1.x$coefficients[153,]
+coef_rC <- fit1.x$coefficients[154,]
+coef_rD <- fit1.x$coefficients[155,]
+coef_rE <- fit1.x$coefficients[156,]
+coef_rF <- fit1.x$coefficients[157,]
+coef_rG <- fit1.x$coefficients[158,]
+coef_rH <- fit1.x$coefficients[159,]
+
+bulk_X_d1_sia <- bulk_X_d1
+bulk_X_d1_sia[bulk_meta_d1$plate_name=="plate_5",] <- bulk_X_d1_sia[bulk_meta_d1$plate_name=="plate_5",]-coef_pl5
+bulk_X_d1_sia[bulk_meta_d1$row=="B",] <- bulk_X_d1_sia[bulk_meta_d1$row=="B",]-coef_rB
+bulk_X_d1_sia[bulk_meta_d1$row=="C",] <- bulk_X_d1_sia[bulk_meta_d1$row=="C",]-coef_rC
+bulk_X_d1_sia[bulk_meta_d1$row=="D",] <- bulk_X_d1_sia[bulk_meta_d1$row=="D",]-coef_rD
+bulk_X_d1_sia[bulk_meta_d1$row=="E",] <- bulk_X_d1_sia[bulk_meta_d1$row=="E",]-coef_rE
+bulk_X_d1_sia[bulk_meta_d1$row=="F",] <- bulk_X_d1_sia[bulk_meta_d1$row=="F",]-coef_rF
+bulk_X_d1_sia[bulk_meta_d1$row=="G",] <- bulk_X_d1_sia[bulk_meta_d1$row=="G",]-coef_rG
+bulk_X_d1_sia[bulk_meta_d1$row=="H",] <- bulk_X_d1_sia[bulk_meta_d1$row=="H",]-coef_rH
+
+#########################
+
+fit2 <- lm(as.matrix(bulk_X_d2) ~ bulk_meta_d2$sm_name + bulk_meta_d2$cell_type+ bulk_meta_d2$plate_name + bulk_meta_d2$row, x=TRUE)
+
+index_test <- c()
+for (i in 1: nrow(pairs_test)){
+  ix <- bulk_meta_d2$cell_type==pairs_test$cell_type[i] & bulk_meta_d2$sm_name==pairs_test$sm_name[i]
+  index_test[i] <- row.names(bulk_meta_d2[ix,])
+}
+
+obs_test <- fit2$x[row.names(bulk_X_d2) %in% index_test,]
+obs_train <- fit2$x[!(row.names(bulk_X_d2) %in% index_test),]
+
+X_test <- as.matrix(bulk_X_d2[row.names(bulk_X_d2) %in% index_test,]) 
+X_train <- as.matrix(bulk_X_d2[!(row.names(bulk_X_d2) %in% index_test),])
+
+fit2.x <- lm.fit(obs_train,X_train)
+
+coef_pl4 <- fit2.x$coefficients[152,]
+coef_rB <- fit2.x$coefficients[153,]
+coef_rC <- fit2.x$coefficients[154,]
+coef_rD <- fit2.x$coefficients[155,]
+coef_rE <- fit2.x$coefficients[156,]
+coef_rF <- fit2.x$coefficients[157,]
+coef_rG <- fit2.x$coefficients[158,]
+coef_rH <- fit2.x$coefficients[159,]
+
+bulk_X_d2_sia <- bulk_X_d2
+bulk_X_d2_sia[bulk_meta_d2$plate_name=="plate_4",] <- bulk_X_d2_sia[bulk_meta_d2$plate_name=="plate_4",]-coef_pl4
+bulk_X_d2_sia[bulk_meta_d2$row=="B",] <- bulk_X_d2_sia[bulk_meta_d2$row=="B",]-coef_rB
+bulk_X_d2_sia[bulk_meta_d2$row=="C",] <- bulk_X_d2_sia[bulk_meta_d2$row=="C",]-coef_rC
+bulk_X_d2_sia[bulk_meta_d2$row=="D",] <- bulk_X_d2_sia[bulk_meta_d2$row=="D",]-coef_rD
+bulk_X_d2_sia[bulk_meta_d2$row=="E",] <- bulk_X_d2_sia[bulk_meta_d2$row=="E",]-coef_rE
+bulk_X_d2_sia[bulk_meta_d2$row=="F",] <- bulk_X_d2_sia[bulk_meta_d2$row=="F",]-coef_rF
+bulk_X_d2_sia[bulk_meta_d2$row=="G",] <- bulk_X_d2_sia[bulk_meta_d2$row=="G",]-coef_rG
+bulk_X_d2_sia[bulk_meta_d2$row=="H",] <- bulk_X_d2_sia[bulk_meta_d2$row=="H",]-coef_rH
+```
+
+```{r}
+View(control[control$cell_type=="T regular cells"])
+```
+
+```{r}
+d0_full <- data.frame(bulk_meta_d0,bulk_X_d0_sia)
+d1_full <- data.frame(bulk_meta_d1,bulk_X_d1_sia)
+d2_full <- data.frame(bulk_meta_d2,bulk_X_d2_sia)
+
+index <- c()
+for (i in 1: nrow(pairs_train)){
+  ix <- bulk_meta_d0$cell_type==pairs_train$cell_type[i] & bulk_meta_d0$sm_name==pairs_train$sm_name[i]
+  index[i] <- row.names(bulk_meta_d0[ix,])
+}
+
+d0_train_X_sia <- bulk_X_d0_sia[row.names(bulk_X_d0) %in% index,]
+
+index <- c()
+for (i in 1: nrow(pairs_train)){
+  ix <- bulk_meta_d1$cell_type==pairs_train$cell_type[i] & bulk_meta_d1$sm_name==pairs_train$sm_name[i]
+  index[i] <- row.names(bulk_meta_d1[ix,])
+}
+
+d1_train_X_sia <- bulk_X_d1[row.names(bulk_X_d1_sia) %in% index,]
+
+index <- c()
+for (i in 1: nrow(pairs_train)){
+  ix <- bulk_meta_d2$cell_type==pairs_train$cell_type[i] & bulk_meta_d2$sm_name==pairs_train$sm_name[i]
+  index[i] <- row.names(bulk_meta_d2[ix,])
+}
+
+d2_train_X_sia <- bulk_X_d2[row.names(bulk_X_d2_sia) %in% index,]
+
 d0_test_full <- data.frame(d0_test_meta,d0_test_X)
-d0_train_full <- data.frame(d0_train_meta,d0_train_X)
+d0_train_full_sia <- data.frame(d0_train_meta,d0_train_X_sia)
 
-d1_full <- data.frame(bulk_meta_d1,bulk_X_d1)
 d1_test_full <- data.frame(d1_test_meta,d0_test_X)
-d1_train_full <- data.frame(d1_train_meta,d0_train_X)
+d1_train_full_sia <- data.frame(d1_train_meta,d0_train_X_sia)
 
-d2_full <- data.frame(bulk_meta_d2,bulk_X_d2)
 d2_test_full <- data.frame(d2_test_meta,d2_test_X)
-d2_train_full <- data.frame(d2_train_meta,d2_train_X)
+d2_train_full_sia <- data.frame(d2_train_meta,d2_train_X_sia)
 
 
 pred_sia_d0 <- matrix(ncol = ncol(d0_test_X), nrow = nrow(d0_test_X))
 for (i in 1: nrow(d0_test_X)){
   a.target <- d0_test_full[i,]$sm_name
-  c.target <- d0_test_full[i,]$cell_type## assume this (a,c) is not observed
-  subset_searching <- d0_train_full
+  c.target <- d0_test_full[i,]$cell_type
+  subset_searching <- d0_train_full_sia
   y_searching <- as.matrix(subset_searching[,-(1:6)])
   a <- sia_find_donor(subset_searching,a.target,c.target)
   b <- sia_find_training(subset_searching,a,a.target,c.target)
@@ -903,8 +1045,8 @@ names(pred_sia_d0) <- gene_name
 pred_sia_d1 <- matrix(ncol = ncol(d1_test_X), nrow = nrow(d1_test_X))
 for (i in 1: nrow(d1_test_X)){
   a.target <- d1_test_full[i,]$sm_name
-  c.target <- d1_test_full[i,]$cell_type## assume this (a,c) is not observed
-  subset_searching <- d1_train_full
+  c.target <- d1_test_full[i,]$cell_type
+  subset_searching <- d1_train_full_sia
   y_searching <- as.matrix(subset_searching[,-(1:6)])
   a <- sia_find_donor(subset_searching,a.target,c.target)
   b <- sia_find_training(subset_searching,a,a.target,c.target)
@@ -918,8 +1060,8 @@ names(pred_sia_d1) <- gene_name
 pred_sia_d2 <- matrix(ncol = ncol(d2_test_X), nrow = nrow(d2_test_X))
 for (i in 1: nrow(d2_test_X)){
   a.target <- d2_test_full[i,]$sm_name
-  c.target <- d2_test_full[i,]$cell_type## assume this (a,c) is not observed
-  subset_searching <- d2_train_full
+  c.target <- d2_test_full[i,]$cell_type
+  subset_searching <- d2_train_full_sia
   y_searching <- as.matrix(subset_searching[,-(1:6)])
   a <- sia_find_donor(subset_searching,a.target,c.target)
   b <- sia_find_training(subset_searching,a,a.target,c.target)
@@ -929,9 +1071,72 @@ for (i in 1: nrow(d2_test_X)){
 pred_sia_d2 <- data.frame(pred_sia_d2)
 names(pred_sia_d2) <- gene_name
 
-sia_pred_full_d0 <- data.frame(d0_test_meta,pred_sia_d0)
-sia_pred_full_d1 <- data.frame(d1_test_meta,pred_sia_d1)
-sia_pred_full_d2 <- data.frame(d2_test_meta,pred_sia_d2)
+#################
+
+coef_pl2 <- fit0.x$coefficients[152,]
+coef_rB <- fit0.x$coefficients[153,]
+coef_rC <- fit0.x$coefficients[154,]
+coef_rD <- fit0.x$coefficients[155,]
+coef_rE <- fit0.x$coefficients[156,]
+coef_rF <- fit0.x$coefficients[157,]
+coef_rG <- fit0.x$coefficients[158,]
+coef_rH <- fit0.x$coefficients[159,]
+
+pred_sia_d0_adj <- pred_sia_d0
+pred_sia_d0_adj[d0_test_meta$plate_name=="plate_2",] <- pred_sia_d0_adj[d0_test_meta$plate_name=="plate_2",]+coef_pl2
+pred_sia_d0_adj[d0_test_meta$row=="B",] <- pred_sia_d0_adj[d0_test_meta$row=="B",]+coef_rB
+pred_sia_d0_adj[d0_test_meta$row=="C",] <- pred_sia_d0_adj[d0_test_meta$row=="C",]+coef_rC
+pred_sia_d0_adj[d0_test_meta$row=="D",] <- pred_sia_d0_adj[d0_test_meta$row=="D",]+coef_rD
+pred_sia_d0_adj[d0_test_meta$row=="E",] <- pred_sia_d0_adj[d0_test_meta$row=="E",]+coef_rE
+pred_sia_d0_adj[d0_test_meta$row=="F",] <- pred_sia_d0_adj[d0_test_meta$row=="F",]+coef_rF
+pred_sia_d0_adj[d0_test_meta$row=="G",] <- pred_sia_d0_adj[d0_test_meta$row=="G",]+coef_rG
+pred_sia_d0_adj[d0_test_meta$row=="H",] <- pred_sia_d0_adj[d0_test_meta$row=="H",]+coef_rH
+
+###################
+
+coef_pl5 <- fit1.x$coefficients[152,]
+coef_rB <- fit1.x$coefficients[153,]
+coef_rC <- fit1.x$coefficients[154,]
+coef_rD <- fit1.x$coefficients[155,]
+coef_rE <- fit1.x$coefficients[156,]
+coef_rF <- fit1.x$coefficients[157,]
+coef_rG <- fit1.x$coefficients[158,]
+coef_rH <- fit1.x$coefficients[159,]
+
+pred_sia_d1_adj <- pred_sia_d1
+pred_sia_d1_adj[d1_test_meta$plate_name=="plate_5",] <- pred_sia_d1_adj[d1_test_meta$plate_name=="plate_5",]+coef_pl5
+pred_sia_d1_adj[d1_test_meta$row=="B",] <- pred_sia_d1_adj[d1_test_meta$row=="B",]+coef_rB
+pred_sia_d1_adj[d1_test_meta$row=="C",] <- pred_sia_d1_adj[d1_test_meta$row=="C",]+coef_rC
+pred_sia_d1_adj[d1_test_meta$row=="D",] <- pred_sia_d1_adj[d1_test_meta$row=="D",]+coef_rD
+pred_sia_d1_adj[d1_test_meta$row=="E",] <- pred_sia_d1_adj[d1_test_meta$row=="E",]+coef_rE
+pred_sia_d1_adj[d1_test_meta$row=="F",] <- pred_sia_d1_adj[d1_test_meta$row=="F",]+coef_rF
+pred_sia_d1_adj[d1_test_meta$row=="G",] <- pred_sia_d1_adj[d1_test_meta$row=="G",]+coef_rG
+pred_sia_d1_adj[d1_test_meta$row=="H",] <- pred_sia_d1_adj[d1_test_meta$row=="H",]+coef_rH
+
+######################
+
+coef_pl4 <- fit2.x$coefficients[152,]
+coef_rB <- fit2.x$coefficients[153,]
+coef_rC <- fit2.x$coefficients[154,]
+coef_rD <- fit2.x$coefficients[155,]
+coef_rE <- fit2.x$coefficients[156,]
+coef_rF <- fit2.x$coefficients[157,]
+coef_rG <- fit2.x$coefficients[158,]
+coef_rH <- fit2.x$coefficients[159,]
+
+pred_sia_d2_adj <- pred_sia_d2
+pred_sia_d2_adj[d2_test_meta$plate_name=="plate_4",] <- pred_sia_d2_adj[d2_test_meta$plate_name=="plate_4",]+coef_pl4
+pred_sia_d2_adj[d2_test_meta$row=="B",] <- pred_sia_d2_adj[d2_test_meta$row=="B",]+coef_rB
+pred_sia_d2_adj[d2_test_meta$row=="C",] <- pred_sia_d2_adj[d2_test_meta$row=="C",]+coef_rC
+pred_sia_d2_adj[d2_test_meta$row=="D",] <- pred_sia_d2_adj[d2_test_meta$row=="D",]+coef_rD
+pred_sia_d2_adj[d2_test_meta$row=="E",] <- pred_sia_d2_adj[d2_test_meta$row=="E",]+coef_rE
+pred_sia_d2_adj[d2_test_meta$row=="F",] <- pred_sia_d2_adj[d2_test_meta$row=="F",]+coef_rF
+pred_sia_d2_adj[d2_test_meta$row=="G",] <- pred_sia_d2_adj[d2_test_meta$row=="G",]+coef_rG
+pred_sia_d2_adj[d2_test_meta$row=="H",] <- pred_sia_d2_adj[d2_test_meta$row=="H",]+coef_rH
+
+sia_pred_full_d0 <- data.frame(d0_test_meta,pred_sia_d0_adj)
+sia_pred_full_d1 <- data.frame(d1_test_meta,pred_sia_d1_adj)
+sia_pred_full_d2 <- data.frame(d2_test_meta,pred_sia_d2_adj)
 
 sia_pred_full <- data.frame(rbind(sia_pred_full_d0,sia_pred_full_d1,sia_pred_full_d2))
 
@@ -942,24 +1147,64 @@ sia_pred_full <- data.frame(rbind(sia_pred_full_d0,sia_pred_full_d1,sia_pred_ful
 ### Cell model prediction
 
 ```{r}
-r2_ct <- c()
+r2_ct_d0 <- c()
 for (i in 1:nrow(pairs_test)){
-  ix <- bulk_meta$cell_type==pairs_test$cell_type[i] & bulk_meta$sm_name==pairs_test$sm_name[i]
-  obs_expr <- bulk_adata_X[ix,]
-  obs_mean <- apply(obs_expr,2,mean)
-  ix_n <- ct_pred_full$cell_type==pairs_test$cell_type[i] & ct_pred_full$sm_name==pairs_test$sm_name[i]
-  pred_expr <- ct_pred_full[ix_n,-(1:6)]
-  pred_mean <- apply(pred_expr,2,mean)
-  r2_ct[i] <- round(cor(obs_mean,pred_mean)^2,2)
+  ix <- bulk_meta_d0$cell_type==pairs_test$cell_type[i] & bulk_meta_d0$sm_name==pairs_test$sm_name[i]
+  obs_expr <- as.numeric(bulk_X_d0[ix,])
+  ix_n <- ct_pred_full_d0$cell_type==pairs_test$cell_type[i] & ct_pred_full_d0$sm_name==pairs_test$sm_name[i]
+  pred_expr <- as.numeric(ct_pred_full_d0[ix_n,-(1:6)])
+  r2_ct_d0[i] <- round(cor(obs_expr,pred_expr)^2,2)
   
-  dt <- data.frame(gene_name,obs_mean,pred_mean)
+  dt <- data.frame(gene_name,obs_expr,pred_expr)
   names(dt) <- c("gene_name","in_vitro_mean","in_silico_prediction")
   
   p <- ggplot(dt, aes(x=in_vitro_mean, y=in_silico_prediction)) + 
   geom_point(shape=2,alpha=0.8, color="blue")+
   geom_smooth(method=lm, na.rm = TRUE,colour="black")+
   xlab("in_vitro_mean") + ylab("in_silico_prediction")+ ggtitle(paste0(pairs_test$cell_type[i],"_",pairs_test$sm_name[i]))+
-  labs(tag = paste0("R2=",r2_ct[i]))+ theme(plot.tag.position = "topright")
+  labs(tag = paste0("R2=",r2_ct_d0[i]))+ theme(plot.tag.position = "topright")
+  print(p)
+}
+```
+
+```{r}
+r2_ct_d1 <- c()
+for (i in 1:nrow(pairs_test)){
+  ix <- bulk_meta_d1$cell_type==pairs_test$cell_type[i] & bulk_meta_d1$sm_name==pairs_test$sm_name[i]
+  obs_expr <- as.numeric(bulk_X_d1[ix,])
+  ix_n <- ct_pred_full_d1$cell_type==pairs_test$cell_type[i] & ct_pred_full_d1$sm_name==pairs_test$sm_name[i]
+  pred_expr <- as.numeric(ct_pred_full_d1[ix_n,-(1:6)])
+  r2_ct_d1[i] <- round(cor(obs_expr,pred_expr)^2,2)
+  
+  dt <- data.frame(gene_name,obs_expr,pred_expr)
+  names(dt) <- c("gene_name","in_vitro_mean","in_silico_prediction")
+  
+  p <- ggplot(dt, aes(x=in_vitro_mean, y=in_silico_prediction)) + 
+  geom_point(shape=2,alpha=0.8, color="blue")+
+  geom_smooth(method=lm, na.rm = TRUE,colour="black")+
+  xlab("in_vitro_mean") + ylab("in_silico_prediction")+ ggtitle(paste0(pairs_test$cell_type[i],"_",pairs_test$sm_name[i]))+
+  labs(tag = paste0("R2=",r2_ct_d1[i]))+ theme(plot.tag.position = "topright")
+  print(p)
+}
+```
+
+```{r}
+r2_ct_d2 <- c()
+for (i in 1:nrow(pairs_test)){
+  ix <- bulk_meta_d2$cell_type==pairs_test$cell_type[i] & bulk_meta_d2$sm_name==pairs_test$sm_name[i]
+  obs_expr <- as.numeric(bulk_X_d2[ix,])
+  ix_n <- ct_pred_full_d2$cell_type==pairs_test$cell_type[i] & ct_pred_full_d2$sm_name==pairs_test$sm_name[i]
+  pred_expr <- as.numeric(ct_pred_full_d2[ix_n,-(1:6)])
+  r2_ct_d2[i] <- round(cor(obs_expr,pred_expr)^2,2)
+  
+  dt <- data.frame(gene_name,obs_expr,pred_expr)
+  names(dt) <- c("gene_name","in_vitro_mean","in_silico_prediction")
+  
+  p <- ggplot(dt, aes(x=in_vitro_mean, y=in_silico_prediction)) + 
+  geom_point(shape=2,alpha=0.8, color="blue")+
+  geom_smooth(method=lm, na.rm = TRUE,colour="black")+
+  xlab("in_vitro_mean") + ylab("in_silico_prediction")+ ggtitle(paste0(pairs_test$cell_type[i],"_",pairs_test$sm_name[i]))+
+  labs(tag = paste0("R2=",r2_ct_d2[i]))+ theme(plot.tag.position = "topright")
   print(p)
 }
 ```
@@ -967,24 +1212,64 @@ for (i in 1:nrow(pairs_test)){
 ### Perturbation model prediction
 
 ```{r}
-r2_pt <- c()
+r2_pt_d0 <- c()
 for (i in 1:nrow(pairs_test)){
-  ix <- bulk_meta$cell_type==pairs_test$cell_type[i] & bulk_meta$sm_name==pairs_test$sm_name[i]
-  obs_expr <- bulk_adata_X[ix,]
-  obs_mean <- apply(obs_expr,2,mean)
-  ix_n <- pt_pred_full$cell_type==pairs_test$cell_type[i] & pt_pred_full$sm_name==pairs_test$sm_name[i]
-  pred_expr <- pt_pred_full[ix_n,-(1:6)]
-  pred_mean <- apply(pred_expr,2,mean)
-  r2_pt[i] <- round(cor(obs_mean,pred_mean)^2,2)
+  ix <- bulk_meta_d0$cell_type==pairs_test$cell_type[i] & bulk_meta_d0$sm_name==pairs_test$sm_name[i]
+  obs_expr <- as.numeric(bulk_X_d0[ix,])
+  ix_n <- pt_pred_full_d0$cell_type==pairs_test$cell_type[i] & pt_pred_full_d0$sm_name==pairs_test$sm_name[i]
+  pred_expr <- as.numeric(pt_pred_full_d0[ix_n,-(1:6)])
+  r2_pt_d0[i] <- round(cor(obs_expr,pred_expr)^2,2)
   
-  dt <- data.frame(gene_name,obs_mean,pred_mean)
+  dt <- data.frame(gene_name,obs_expr,pred_expr)
   names(dt) <- c("gene_name","in_vitro_mean","in_silico_prediction")
   
   p <- ggplot(dt, aes(x=in_vitro_mean, y=in_silico_prediction)) + 
   geom_point(shape=2,alpha=0.8, color="blue")+
   geom_smooth(method=lm, na.rm = TRUE,colour="black")+
   xlab("in_vitro_mean") + ylab("in_silico_prediction")+ ggtitle(paste0(pairs_test$cell_type[i],"_",pairs_test$sm_name[i]))+
-  labs(tag = paste0("R2=",r2_pt[i]))+ theme(plot.tag.position = "topright")
+  labs(tag = paste0("R2=",r2_pt_d0[i]))+ theme(plot.tag.position = "topright")
+  print(p)
+}
+```
+
+```{r}
+r2_pt_d1 <- c()
+for (i in 1:nrow(pairs_test)){
+  ix <- bulk_meta_d1$cell_type==pairs_test$cell_type[i] & bulk_meta_d1$sm_name==pairs_test$sm_name[i]
+  obs_expr <- as.numeric(bulk_X_d1[ix,])
+  ix_n <- pt_pred_full_d1$cell_type==pairs_test$cell_type[i] & pt_pred_full_d1$sm_name==pairs_test$sm_name[i]
+  pred_expr <- as.numeric(pt_pred_full_d1[ix_n,-(1:6)])
+  r2_pt_d1[i] <- round(cor(obs_expr,pred_expr)^2,2)
+  
+  dt <- data.frame(gene_name,obs_expr,pred_expr)
+  names(dt) <- c("gene_name","in_vitro_mean","in_silico_prediction")
+  
+  p <- ggplot(dt, aes(x=in_vitro_mean, y=in_silico_prediction)) + 
+  geom_point(shape=2,alpha=0.8, color="blue")+
+  geom_smooth(method=lm, na.rm = TRUE,colour="black")+
+  xlab("in_vitro_mean") + ylab("in_silico_prediction")+ ggtitle(paste0(pairs_test$cell_type[i],"_",pairs_test$sm_name[i]))+
+  labs(tag = paste0("R2=",r2_pt_d1[i]))+ theme(plot.tag.position = "topright")
+  print(p)
+}
+```
+
+```{r}
+r2_pt_d2 <- c()
+for (i in 1:nrow(pairs_test)){
+  ix <- bulk_meta_d2$cell_type==pairs_test$cell_type[i] & bulk_meta_d2$sm_name==pairs_test$sm_name[i]
+  obs_expr <- as.numeric(bulk_X_d2[ix,])
+  ix_n <- pt_pred_full_d2$cell_type==pairs_test$cell_type[i] & pt_pred_full_d2$sm_name==pairs_test$sm_name[i]
+  pred_expr <- as.numeric(pt_pred_full_d2[ix_n,-(1:6)])
+  r2_pt_d2[i] <- round(cor(obs_expr,pred_expr)^2,2)
+  
+  dt <- data.frame(gene_name,obs_expr,pred_expr)
+  names(dt) <- c("gene_name","in_vitro_mean","in_silico_prediction")
+  
+  p <- ggplot(dt, aes(x=in_vitro_mean, y=in_silico_prediction)) + 
+  geom_point(shape=2,alpha=0.8, color="blue")+
+  geom_smooth(method=lm, na.rm = TRUE,colour="black")+
+  xlab("in_vitro_mean") + ylab("in_silico_prediction")+ ggtitle(paste0(pairs_test$cell_type[i],"_",pairs_test$sm_name[i]))+
+  labs(tag = paste0("R2=",r2_pt_d2[i]))+ theme(plot.tag.position = "topright")
   print(p)
 }
 ```
@@ -992,49 +1277,141 @@ for (i in 1:nrow(pairs_test)){
 ### Two factor model prediction
 
 ```{r}
-r2_tf <- c()
+r2_tf_d0 <- c()
 for (i in 1:nrow(pairs_test)){
-  ix <- bulk_meta$cell_type==pairs_test$cell_type[i] & bulk_meta$sm_name==pairs_test$sm_name[i]
-  obs_expr <- bulk_adata_X[ix,]
-  obs_mean <- apply(obs_expr,2,mean)
-  ix_n <- tf_pred_full$cell_type==pairs_test$cell_type[i] & tf_pred_full$sm_name==pairs_test$sm_name[i]
-  pred_expr <- tf_pred_full[ix_n,-(1:6)]
-  pred_mean <- apply(pred_expr,2,mean)
-  r2_tf[i] <- round(cor(obs_mean,pred_mean)^2,2)
+  ix <- bulk_meta_d0$cell_type==pairs_test$cell_type[i] & bulk_meta_d0$sm_name==pairs_test$sm_name[i]
+  obs_expr <- as.numeric(bulk_X_d0[ix,])
+  ix_n <- tf_pred_full_d0$cell_type==pairs_test$cell_type[i] & tf_pred_full_d0$sm_name==pairs_test$sm_name[i]
+  pred_expr <- as.numeric(tf_pred_full_d0[ix_n,-(1:6)])
+  r2_tf_d0[i] <- round(cor(obs_expr,pred_expr)^2,2)
   
-  dt <- data.frame(gene_name,obs_mean,pred_mean)
+  dt <- data.frame(gene_name,obs_expr,pred_expr)
   names(dt) <- c("gene_name","in_vitro_mean","in_silico_prediction")
   
   p <- ggplot(dt, aes(x=in_vitro_mean, y=in_silico_prediction)) + 
   geom_point(shape=2,alpha=0.8, color="blue")+
   geom_smooth(method=lm, na.rm = TRUE,colour="black")+
   xlab("in_vitro_mean") + ylab("in_silico_prediction")+ ggtitle(paste0(pairs_test$cell_type[i],"_",pairs_test$sm_name[i]))+
-  labs(tag = paste0("R2=",r2_tf[i]))+ theme(plot.tag.position = "topright")
+  labs(tag = paste0("R2=",r2_tf_d0[i]))+ theme(plot.tag.position = "topright")
   print(p)
 }
+
+```
+
+```{r}
+r2_tf_d1 <- c()
+for (i in 1:nrow(pairs_test)){
+  ix <- bulk_meta_d1$cell_type==pairs_test$cell_type[i] & bulk_meta_d1$sm_name==pairs_test$sm_name[i]
+  obs_expr <- as.numeric(bulk_X_d1[ix,])
+  ix_n <- tf_pred_full_d1$cell_type==pairs_test$cell_type[i] & tf_pred_full_d1$sm_name==pairs_test$sm_name[i]
+  pred_expr <- as.numeric(tf_pred_full_d1[ix_n,-(1:6)])
+  r2_tf_d1[i] <- round(cor(obs_expr,pred_expr)^2,2)
+  
+  dt <- data.frame(gene_name,obs_expr,pred_expr)
+  names(dt) <- c("gene_name","in_vitro_mean","in_silico_prediction")
+  
+  p <- ggplot(dt, aes(x=in_vitro_mean, y=in_silico_prediction)) + 
+  geom_point(shape=2,alpha=0.8, color="blue")+
+  geom_smooth(method=lm, na.rm = TRUE,colour="black")+
+  xlab("in_vitro_mean") + ylab("in_silico_prediction")+ ggtitle(paste0(pairs_test$cell_type[i],"_",pairs_test$sm_name[i]))+
+  labs(tag = paste0("R2=",r2_tf_d1[i]))+ theme(plot.tag.position = "topright")
+  print(p)
+}
+
+```
+
+```{r}
+r2_tf_d2 <- c()
+for (i in 1:nrow(pairs_test)){
+  ix <- bulk_meta_d2$cell_type==pairs_test$cell_type[i] & bulk_meta_d2$sm_name==pairs_test$sm_name[i]
+  obs_expr <- as.numeric(bulk_X_d2[ix,])
+  ix_n <- tf_pred_full_d2$cell_type==pairs_test$cell_type[i] & tf_pred_full_d2$sm_name==pairs_test$sm_name[i]
+  pred_expr <- as.numeric(tf_pred_full_d2[ix_n,-(1:6)])
+  r2_tf_d2[i] <- round(cor(obs_expr,pred_expr)^2,2)
+  
+  dt <- data.frame(gene_name,obs_expr,pred_expr)
+  names(dt) <- c("gene_name","in_vitro_mean","in_silico_prediction")
+  
+  p <- ggplot(dt, aes(x=in_vitro_mean, y=in_silico_prediction)) + 
+  geom_point(shape=2,alpha=0.8, color="blue")+
+  geom_smooth(method=lm, na.rm = TRUE,colour="black")+
+  xlab("in_vitro_mean") + ylab("in_silico_prediction")+ ggtitle(paste0(pairs_test$cell_type[i],"_",pairs_test$sm_name[i]))+
+  labs(tag = paste0("R2=",r2_tf_d2[i]))+ theme(plot.tag.position = "topright")
+  print(p)
+}
+
+```
+
+```{r}
+## Something is not right with T regulatory cells and T cells CD8+
+View(control[control$cell_type=="T regulatory cells" & control$donor_id=="donor_0",1:6])
+View(control[control$cell_type=="T regulatory cells" & control$donor_id=="donor_1",1:6])
+View(control[control$cell_type=="T regulatory cells" & control$donor_id=="donor_2",1:6])
+
+View(control[control$cell_type=="NK cells" & control$donor_id=="donor_0",1:6])
 ```
 
 ### SIA prediction
 
 ```{r}
-r2_sia <- c()
+r2_sia_d0 <- c()
 for (i in 1:nrow(pairs_test)){
-  ix <- bulk_meta$cell_type==pairs_test$cell_type[i] & bulk_meta$sm_name==pairs_test$sm_name[i]
-  obs_expr <- bulk_adata_X[ix,]
-  obs_mean <- apply(obs_expr,2,mean)
-  ix_n <- sia_pred_full$cell_type==pairs_test$cell_type[i] & sia_pred_full$sm_name==pairs_test$sm_name[i]
-  pred_expr <- sia_pred_full[ix_n,-(1:6)]
-  pred_mean <- apply(pred_expr,2,mean)
-  r2_sia[i] <- round(cor(obs_mean,pred_mean)^2,2)
+  ix <- bulk_meta_d0$cell_type==pairs_test$cell_type[i] & bulk_meta_d0$sm_name==pairs_test$sm_name[i]
+  obs_expr <- as.numeric(bulk_X_d0[ix,])
+  ix_n <- sia_pred_full_d0$cell_type==pairs_test$cell_type[i] & sia_pred_full_d0$sm_name==pairs_test$sm_name[i]
+  pred_expr <- as.numeric(sia_pred_full_d0[ix_n,-(1:6)])
+  r2_sia_d0[i] <- round(cor(obs_expr,pred_expr)^2,2)
   
-  dt <- data.frame(gene_name,obs_mean,pred_mean)
+  dt <- data.frame(gene_name,obs_expr,pred_expr)
   names(dt) <- c("gene_name","in_vitro_mean","in_silico_prediction")
   
   p <- ggplot(dt, aes(x=in_vitro_mean, y=in_silico_prediction)) + 
   geom_point(shape=2,alpha=0.8, color="blue")+
   geom_smooth(method=lm, na.rm = TRUE,colour="black")+
   xlab("in_vitro_mean") + ylab("in_silico_prediction")+ ggtitle(paste0(pairs_test$cell_type[i],"_",pairs_test$sm_name[i]))+
-  labs(tag = paste0("R2=",r2_sia[i]))+ theme(plot.tag.position = "topright")
+  labs(tag = paste0("R2=",r2_sia_d0[i]))+ theme(plot.tag.position = "topright")
+  print(p)
+}
+```
+
+```{r}
+r2_sia_d1 <- c()
+for (i in 1:nrow(pairs_test)){
+  ix <- bulk_meta_d1$cell_type==pairs_test$cell_type[i] & bulk_meta_d1$sm_name==pairs_test$sm_name[i]
+  obs_expr <- as.numeric(bulk_X_d1[ix,])
+  ix_n <- sia_pred_full_d1$cell_type==pairs_test$cell_type[i] & sia_pred_full_d1$sm_name==pairs_test$sm_name[i]
+  pred_expr <- as.numeric(sia_pred_full_d1[ix_n,-(1:6)])
+  r2_sia_d1[i] <- round(cor(obs_expr,pred_expr)^2,2)
+  
+  dt <- data.frame(gene_name,obs_expr,pred_expr)
+  names(dt) <- c("gene_name","in_vitro_mean","in_silico_prediction")
+  
+  p <- ggplot(dt, aes(x=in_vitro_mean, y=in_silico_prediction)) + 
+  geom_point(shape=2,alpha=0.8, color="blue")+
+  geom_smooth(method=lm, na.rm = TRUE,colour="black")+
+  xlab("in_vitro_mean") + ylab("in_silico_prediction")+ ggtitle(paste0(pairs_test$cell_type[i],"_",pairs_test$sm_name[i]))+
+  labs(tag = paste0("R2=",r2_sia_d1[i]))+ theme(plot.tag.position = "topright")
+  print(p)
+}
+```
+
+```{r}
+r2_sia_d2 <- c()
+for (i in 1:nrow(pairs_test)){
+  ix <- bulk_meta_d2$cell_type==pairs_test$cell_type[i] & bulk_meta_d2$sm_name==pairs_test$sm_name[i]
+  obs_expr <- as.numeric(bulk_X_d2[ix,])
+  ix_n <- sia_pred_full_d2$cell_type==pairs_test$cell_type[i] & sia_pred_full_d2$sm_name==pairs_test$sm_name[i]
+  pred_expr <- as.numeric(sia_pred_full_d2[ix_n,-(1:6)])
+  r2_sia_d2[i] <- round(cor(obs_expr,pred_expr)^2,2)
+  
+  dt <- data.frame(gene_name,obs_expr,pred_expr)
+  names(dt) <- c("gene_name","in_vitro_mean","in_silico_prediction")
+  
+  p <- ggplot(dt, aes(x=in_vitro_mean, y=in_silico_prediction)) + 
+  geom_point(shape=2,alpha=0.8, color="blue")+
+  geom_smooth(method=lm, na.rm = TRUE,colour="black")+
+  xlab("in_vitro_mean") + ylab("in_silico_prediction")+ ggtitle(paste0(pairs_test$cell_type[i],"_",pairs_test$sm_name[i]))+
+  labs(tag = paste0("R2=",r2_sia_d2[i]))+ theme(plot.tag.position = "topright")
   print(p)
 }
 ```
@@ -1075,11 +1452,11 @@ for (i in cell_type_name){
   row <- ct_DE_temp$row
   counts <- data.frame(t(ct_DE_temp[,-(1:6)]))
   counts[counts<0] <- 0
-  d0 <- DGEList(counts)
+  d1 <- DGEList(counts)
   d0 <- calcNormFactors(d0)
 
   mm <- model.matrix(~0+Rpert_temp+donor_id+plate_name+row)
-  y <- voom(d0, mm, plot=TRUE)
+  y <- voom(d1, mm, plot=TRUE)
   fit <- lmFit(y, mm)
   
   grp_temp <- colnames(coef(fit))[colnames(coef(fit)) %like% "Rpert" & colnames(coef(fit)) != "Rpert_temp2"]
@@ -1172,7 +1549,7 @@ for (i in cell_type_name){
   counts <- data.frame(t(sia_DE_temp[,-(1:6)]))
   counts[counts<0] <- 0
   d0 <- DGEList(counts)
-  #d0 <- calcNormFactors(d0, na.rm=TRUE)
+  d0 <- calcNormFactors(d0, na.rm=TRUE)
 
   mm <- model.matrix(~0+Rpert_temp+donor_id+plate_name+row)
   y <- voom(d0, mm, plot=TRUE)
@@ -1209,8 +1586,8 @@ for (i in 1: length(DE_sia_result[[5]])){
 ```
 
 ```{r, fig.height=10}
-for (i in 1: length(DE_sia_result[[1]])){
-  df_temp <- data.frame(rownames(DE_sia_result[[1]][[i]]),DE_sia_result[[1]][[i]]$P.Value,DE_sia_result[[1]][[i]]$logFC)
+for (i in 1: length(DE_pt_result[[1]])){
+  df_temp <- data.frame(rownames(DE_pt_result[[1]][[i]]),DE_pt_result[[1]][[i]]$P.Value,DE_pt_result[[1]][[i]]$logFC)
   names(df_temp) <- c("gene_name","P.Val","logFC")
   v <- EnhancedVolcano(df_temp,
        lab = gene_name,

@@ -849,6 +849,23 @@ library(latex2exp)
 ### Compare R2
 
 ```{r}
+## R2 cell type model
+status <- rep("non DE", length(genes))
+status[which(genes %in% DEG_genes_obs[[3]])] <- "DE"
+observation <- kang_sti_m[[3]]
+prediction <- ct_pred[[3]]
+dt_r2_ct <- data.frame(genes,observation,prediction,status)
+names(dt_r2_ct) <- c("genes", "observation", "prediction", "status")
+
+p_r2_ct <- ggplot(dt_r2_ct, aes(x=prediction, y=observation, color=status)) + 
+  geom_point()+
+  geom_smooth(method=lm, na.rm = TRUE,colour="black")+
+  scale_colour_manual(name="status", values=c("red","blue"))+
+  xlab("predicted stimulated expressions") + ylab("In vitro stimulated expressions")+theme_bw()+ theme(legend.position="bottom")+theme(axis.title = element_text(size=12))+ggtitle(TeX(paste("CD4T, $R^2 = $",R2_ct[3])))
+  print(p_r2_ct)
+```
+
+```{r}
   status <- rep("non DE", length(genes))
   status[which(genes %in% DEG_genes_obs[[3]])] <- "DE"
   observation <- kang_sti_m[[3]]
@@ -1048,7 +1065,7 @@ library(cowplot)
 r1 <- plot_grid(p_r2,p_cfm,nrow=1,ncol=2,labels = c("a","b"), align = "h",axis = "t",label_size = 18)
 r2 <- plot_grid(vp_iv, vp_tf, p_pr, NULL, vp_scgen, NULL, labels = c("c","","d","","",""), ncol=3,nrow=2,align = "hv",label_size = 18)
 
-pdf("CD4T.pdf",height=14,width = 18)
+pdf("CD4T.pdf",height=14,width = 16)
 plot_grid(r1,r2,nrow=2, align = "hv",rel_heights = c(1,3))
 dev.off()
 
@@ -1248,6 +1265,24 @@ dev.off()
 ## Compare results across all cell types
 
 ```{r}
+## R2 barplot for cell type model
+cell_type <- c(ctype,ctype)
+R2 <- c(R2_ct,R2_DE_ct)
+method <- c(rep("All genes",length(ctype)),rep("DE genes",length(ctype)))
+dtff <- data.frame(cell_type,R2,method)
+
+pct <- ggplot(dtff, aes(fill=method, y=R2, x=cell_type)) + geom_bar(position = "dodge", stat="identity")+geom_text(aes(label = R2),position = position_dodge(width = 0.9), vjust=-0.3)+xlab("Cell type")+
+  ylab(TeX("$R^2$: predicted expressions vs in vitro expressions"))+theme_bw()+ theme(legend.position="bottom") + ylim(c(0,1))+guides(fill=guide_legend(title=""))
+pct
+```
+```{r}
+pdf("r2_ct.pdf",height = 5, width = 13)
+plot_grid(p_r2_ct,NULL,pct,nrow=1,labels = c("a","","b"),label_size = 16,rel_widths = c(1,0.3,1))
+dev.off()
+```
+
+
+```{r}
 ## R2 barplot
 cell_type <- c(ctype,ctype)
 R2 <- c(R2_scgen,R2_tf)
@@ -1255,7 +1290,7 @@ model <- c(rep("scgen",length(ctype)),rep("two-factor",length(ctype)))
 dtf1 <- data.frame(cell_type,R2,model)
 
 p1 <- ggplot(dtf1, aes(fill=model, y=R2, x=cell_type)) + geom_bar(position = "dodge", stat="identity")+geom_text(aes(label = R2),position = position_dodge(width = 0.9), vjust=-0.3)+xlab("Cell type")+
-  ylab(TeX("$R^2$: predicted expressions vs in vitro expressions"))+ theme(legend.position="none") + ylim(c(0,1))
+  ylab(TeX("$R^2$: predicted expressions vs in vitro expressions"))+theme_bw()+ theme(legend.position="none") + ylim(c(0,1))
 p1
 ```
 
@@ -1296,15 +1331,21 @@ for (i in 1:length(pr_auc_tf)){
 pr_auc <- c(scgen_pr_auc,tf_pr_auc)
 dtf2 <- data.frame(cell_type,pr_auc,model)
 
-p3 <- ggplot(dtf2, aes(fill=model, y=pr_auc, x=cell_type)) + geom_bar(position = "dodge", stat="identity")+geom_text(aes(label = pr_auc),position = position_dodge(width = 0.9), vjust=-0.3)+xlab("Cell type")+ylab("AUC-PR") +ylim(c(0,1))
+p3 <- ggplot(dtf2, aes(fill=model, y=pr_auc, x=cell_type)) + geom_bar(position = "dodge", stat="identity")+geom_text(aes(label = pr_auc),position = position_dodge(width = 0.9), vjust=-0.3)+xlab("Cell type")+ylab("AUC-PR") +ylim(c(0,1))+theme_bw()
 p3
 
 
 ```
 
 ```{r,fig.width=20}
-pdf("r2_auc.pdf",height = 6, width = 20)
-plot_grid(p1,p2,p3,nrow=1,rel_widths = c(1,1,1.3),labels = c("a","b","c"))
+pdf("r2_auc.pdf",height = 5, width = 15)
+plot_grid(p1,NULL,p3,nrow=1,rel_widths = c(1,0.3,1.15),labels = c("a","","b"))
+dev.off()
+```
+
+```{r}
+pdf("r2_auc_2.pdf",height = 6, width = 16)
+plot_grid(p1,p3,nrow=1,rel_widths = c(1,1.3),labels = c("a","b"))
 dev.off()
 ```
 
