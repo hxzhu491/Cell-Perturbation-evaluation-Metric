@@ -1063,10 +1063,10 @@ p_cfm <- ggplot(lfc_dt_cd4t, aes(x=prediction, y=observation, color=status)) +
 ## arrange all results for CD4T
 library(cowplot)
 r1 <- plot_grid(p_r2,p_cfm,nrow=1,ncol=2,labels = c("a","b"), align = "h",axis = "t",label_size = 18)
-r2 <- plot_grid(vp_iv, vp_tf, p_pr, NULL, vp_scgen, NULL, labels = c("c","","d","","",""), ncol=3,nrow=2,align = "hv",label_size = 18)
+r2 <- plot_grid(vp_iv, vp_tf, vp_scgen, p_pr, labels = c("c","","","d"), ncol=4,align = "h",label_size = 18)
 
-pdf("CD4T.pdf",height=14,width = 16)
-plot_grid(r1,r2,nrow=2, align = "hv",rel_heights = c(1,3))
+pdf("CD4T.pdf",height=9,width = 20)
+plot_grid(r1,r2,nrow=2, align = "hv",rel_heights = c(1,1.4))
 dev.off()
 
 ```
