@@ -1578,8 +1578,8 @@ dt <- data.frame(rbind(dt_d0,dt_d1,dt_d2),d)
 p4 <- ggplot(dt, aes(x=method, y= r2)) + geom_dotplot(binaxis = "y", stackdir = "center", stackratio = 1.0, dotsize = 0.5)+facet_wrap(~d)
 p4
 
-pdf("dot.pdf",height = 6, width = 20)
-ggplot(dt, aes(x=method, y= r2)) + geom_dotplot(binaxis = "y", stackdir = "center", stackratio = 0.5, dotsize = 0.2)+stat_summary(fun.data="mean_sdl", fun.args = list(mult=1), geom="crossbar", width=0.5,color="red")+facet_wrap(~d)
+pdf("dot.pdf",height = 6, width = 18)
+ggplot(dt, aes(x=method, y= r2)) + geom_dotplot(binaxis = "y", stackdir = "center", stackratio = 0.6, dotsize = 0.3, fill="#FFAAD4")+stat_summary(fun.data="mean_sdl", fun.args = list(mult=1), geom="pointrange",color="blue")+stat_summary(fun.y=mean, geom="label", aes(label = round(..y.., 2)), hjust = -1, vjust=-0.1)+scale_x_discrete(limits=c("cell type","perturbation","two-factor","SIA"))+facet_wrap(~d)+theme_bw()
 dev.off()
 ```
 
@@ -1915,6 +1915,19 @@ for (i in 1: nrow(test_cmb_ix)){
          print(pr_curve[[i]])
 }
 ```
+```{r}
+##dot plot PR_AUC
+mthd <- c(rep("cell type",100),rep("perturbation",100),rep("two-factor",100),rep("SIA",100))
+prauc <- c(pr_auc_ct,pr_auc_pt,pr_auc_tf,pr_auc_sia)
+prauc <- round(prauc,2)
+dt <- data.frame(mthd,prauc)
+names(dt) <- c("method","AUC-PR")
+
+pdf("dot_auc.pdf",height = 5, width = 7)
+ggplot(dt, aes(x=method, y= prauc)) + geom_dotplot(binaxis = "y", stackdir = "center", stackratio = 0.6, dotsize = 0.3, fill="#FFAAD4")+stat_summary(fun.data="mean_sdl", fun.args = list(mult=1), geom="pointrange",color="blue")+stat_summary(fun.y=mean, geom="label", aes(label = round(..y.., 2)), hjust = -1, vjust=-0.1)+scale_x_discrete(limits=c("cell type","perturbation","two-factor","SIA"))+theme_bw()
+dev.off()
+
+```
 
 ```{r}
 base_auc_pr <- c()
@@ -1926,3 +1939,58 @@ auc_pr <- data.frame(base_auc_pr,pr_auc_ct,pr_auc_pt,pr_auc_tf,pr_auc_sia)
 names(auc_pr) <- c("baseline","ct","pt","tf","sia")
 apply(auc_pr,2,mean)
 ``` 
+
+## Generate Plots for manuscript
+
+### Individual case: T cells CD4+ Perhexiline
+
+#### R2 scatter plot
+```{r}
+status <- rep("non DE", length(gene_name))
+status[which(gene_name %in% DEG_iv[[39]])] <- "DE"
+observation <- as.numeric(bulk_X_d0[42,])
+prediction <- as.numeric(pred_ct_d0[42,])
+dt_r2_ct <- data.frame(gene_name,observation,prediction,status)
+names(dt_r2_ct) <- c("genes", "observation", "prediction", "status")
+  
+status <- rep("non DE", length(gene_name))
+status[which(gene_name %in% DEG_iv[[39]])] <- "DE"
+observation <- as.numeric(bulk_X_d0[42,])
+prediction <- as.numeric(pred_pt_d0[42,])
+dt_r2_pt <- data.frame(gene_name,observation,prediction,status)
+names(dt_r2_pt) <- c("genes", "observation", "prediction", "status")
+
+status <- rep("non DE", length(gene_name))
+status[which(gene_name %in% DEG_iv[[39]])] <- "DE"
+observation <- as.numeric(bulk_X_d0[42,])
+prediction <- as.numeric(pred_tf_d0[42,])
+dt_r2_tf <- data.frame(gene_name,observation,prediction,status)
+names(dt_r2_tf) <- c("genes", "observation", "prediction", "status")
+
+status <- rep("non DE", length(gene_name))
+status[which(gene_name %in% DEG_iv[[39]])] <- "DE"
+observation <- as.numeric(bulk_X_d0[42,])
+prediction <- as.numeric(pred_sia_d0[42,])
+dt_r2_sia <- data.frame(gene_name,observation,prediction,status)
+names(dt_r2_sia) <- c("genes", "observation", "prediction", "status")
+
+dt_r2 <- data.frame(rbind(dt_r2_ct,dt_r2_pt,dt_r2_tf,dt_r2_sia))
+method <- c(rep("Cell type",nrow(dt_r2_ct)),rep("Perturbation",nrow(dt_r2_pt)),rep("Two-factor",nrow(dt_r2_tf)),rep("SIA",nrow(dt_r2_sia)))
+dt_r2 <- data.frame(dt_r2,method)
+  
+dt_r2$method <- factor(dt_r2$method, labels = c(TeX(paste("Cell type, $R^2 = $", r2_ct_d0[42])),TeX(paste("Perturbation, $R^2 = $", r2_pt_d0[42])),TeX(paste("Two-factor, $R^2 = $", r2_tf_d0[42])),TeX(paste("SIA, $R^2 = $", r2_sia_d0[42]))))
+  
+  p_r2 <- ggplot(dt_r2, aes(x=prediction, y=observation, color=status)) + 
+  geom_point()+
+  geom_smooth(method=lm, na.rm = TRUE,colour="black")+
+  scale_colour_manual(name="status", values=c("red","blue"))+
+  xlab("predicted stimulated expressions") + ylab("In vitro stimulated expressions")+facet_wrap(~method,nrow = 2,labeller = label_parsed)+theme_bw()+theme(strip.text = element_text(size=12))+ theme(legend.position="bottom")+theme(axis.title = element_text(size=12))
+  print(p_r2)
+```
+
+#### Volcano plot
+
+```{r}
+
+```
+
