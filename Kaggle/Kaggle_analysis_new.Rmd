@@ -54,9 +54,10 @@ library(arrow)
 library(latex2exp)
 ```
 
-## Input bulked data
+## Reproduce Kaggle Compitation results
 
 ```{r}
+## Input bulked data
 bulk_adata_obs <- read.csv("datasets/bulk_adata_obs.csv")
 bulk_adata_var <- read.csv("datasets/bulk_adata_var.csv")
 bulk_adata_X <- read.csv("datasets/bulk_adata_X.csv", header = TRUE)
@@ -64,16 +65,14 @@ bulk_adata_X <- bulk_adata_X[,-1]
 gene_name <- rownames(bulk_adata_var)
 ```
 
-
-## Input reference file
-
 ```{r}
+## Input reference file
 de_train <- read_parquet("datasets/de_train.parquet")
 ```
 
+```{r}
 ## Input Computed DEG results, Compute score and compare to reference file
 
-```{r}
 library(gtools)
 library(ggplot2)
 c_type <- c("B cells", "Myeloid cells","NK cells","T cells CD4_","T cells CD8+","T regulatory cells")
@@ -205,57 +204,8 @@ for (i in 1: length(sn)){
 
 ## We get the same results as the reference file
 ```
-```{r, fig.height=10}
-## Show some volcano plots
-## B cells
 
-B_pval <- DE_p_value[DE_p_value_df$cell_type=="B cells",]
-names(B_pval) <- gene_name
-B_lfc <- DE_lfc[DE_lfc_df$cell_type=="B cells",]
-names(B_lfc) <- gene_name
-
-library(EnhancedVolcano)
-
-for (i in 1: nrow(B_pval)){
-  df_temp <- data.frame(gene_name,t(B_pval[i,]),t(B_lfc[i,]))
-  names(df_temp) <- c("gene_name","P.Val","logFC")
-  v <- EnhancedVolcano(df_temp,
-       lab = gene_name,
-       title = paste0("B cells","__",sm_name_B[i]),
-       x = 'logFC',
-       y = 'P.Val',
-       pCutoff=0.05,
-       FCcutoff = 1,
-       ylim = c(0,max(-log10(df_temp$P.Val))+0.5))
-  print(v)
-}
-```
-
-```{r,fig.height=10}
-## Treg cells
-Treg_pval <- DE_p_value[DE_p_value_df$cell_type=="T regulatory cells",]
-names(Treg_pval) <- gene_name
-Treg_lfc <- DE_lfc[DE_lfc_df$cell_type=="T regulatory cells",]
-names(Treg_lfc) <- gene_name
-
-library(EnhancedVolcano)
-
-for (i in 15: 36){
-  df_temp <- data.frame(gene_name,t(Treg_pval[i,]),t(Treg_lfc[i,]))
-  names(df_temp) <- c("gene_name","P.Val","logFC")
-  v <- EnhancedVolcano(df_temp,
-       lab = gene_name,
-       title = paste0("Treg cells","__",sm_name_Treg[i]),
-       x = 'logFC',
-       y = 'P.Val',
-       pCutoff=0.05,
-       FCcutoff = 1,
-       ylim = c(0,max(-log10(df_temp$P.Val))+0.5))
-  print(v)
-}
-```
-
-## Work with pseudo-bulked data
+## Overview of full data
 
 ```{r}
 ## take necessary variables in meta data
@@ -269,8 +219,6 @@ names(bulk_adata_X) <- gene_name
 bulk_full <- data.frame(bulk_meta,bulk_adata_X)
 
 ```
-
-### Overview of full data
 
 ```{r}
 library(ComplexHeatmap)
@@ -662,7 +610,6 @@ d2_sia_full[,-c(1,2)] <- log2(d2_sia_full[,-c(1,2)]+1)
 bulk_X_d0 <- log2(bulk_X_d0+1)
 bulk_X_d1 <- log2(bulk_X_d1+1)
 bulk_X_d2 <- log2(bulk_X_d2+1)
-
 ```
 
 ### Cell type model
@@ -1059,8 +1006,6 @@ sia_pred_full_d1 <- data.frame(d1_test_meta,pred_sia_d1)
 sia_pred_full_d2 <- data.frame(d2_test_meta,pred_sia_d2)
 
 sia_pred_full <- data.frame(rbind(sia_pred_full_d0,sia_pred_full_d1,sia_pred_full_d2))
-
-
 ```
 
 ## Measure the model performance by R2
@@ -1572,15 +1517,21 @@ r2_d2 <- round(r2_d2,2)
 dt_d2 <- data.frame(mthd,r2_d2)
 names(dt_d2) <- c("method","r2")
 
-d <- c(rep("d0",400),rep("d1",400),rep("d2",400))
+d <- c(rep("d1",400),rep("d2",400),rep("d3",400))
 dt <- data.frame(rbind(dt_d0,dt_d1,dt_d2),d)
 
 p4 <- ggplot(dt, aes(x=method, y= r2)) + geom_dotplot(binaxis = "y", stackdir = "center", stackratio = 1.0, dotsize = 0.5)+facet_wrap(~d)
 p4
 
 pdf("dot.pdf",height = 6, width = 18)
-ggplot(dt, aes(x=method, y= r2)) + geom_dotplot(binaxis = "y", stackdir = "center", stackratio = 0.6, dotsize = 0.3, fill="#FFAAD4")+stat_summary(fun.data="mean_sdl", fun.args = list(mult=1), geom="pointrange",color="blue")+stat_summary(fun.y=mean, geom="label", aes(label = round(..y.., 2)), hjust = -1, vjust=-0.1)+scale_x_discrete(limits=c("cell type","perturbation","two-factor","SIA"))+facet_wrap(~d)+theme_bw()
+ggplot(dt, aes(x=method, y= r2)) + geom_dotplot(binaxis = "y", stackdir = "center", stackratio = 0.6, dotsize = 0.3, fill="blue")+stat_summary(fun.data="mean_sdl", fun.args = list(mult=1), geom="pointrange",color="red")+stat_summary(fun.y=mean, geom="label", aes(label = round(..y.., 2)), hjust = -1, vjust=-0.1)+scale_x_discrete(limits=c("cell type","perturbation","two-factor","SIA"))+facet_wrap(~d)+theme_bw()+ylab(TeX("$R^2$"))
 dev.off()
+```
+
+```{r}
+p_dot_r2 <- ggplot(dt, aes(x=method, y= r2)) + geom_dotplot(binaxis = "y", stackdir = "centerwhole", stackratio = 1, dotsize = 0.3, fill="blue", binwidth = 1/80)+stat_summary(fun.data="mean_sdl", fun.args = list(mult=1), geom="pointrange",color="red")+scale_x_discrete(limits=c("cell type","perturbation","two-factor","SIA"))+facet_wrap(~d)+theme_bw()+ylab(TeX("$R^2$"))
+
+p_dot_r2
 ```
 
 ```{r}
@@ -1915,18 +1866,137 @@ for (i in 1: nrow(test_cmb_ix)){
          print(pr_curve[[i]])
 }
 ```
+
+```{r}
+library(precrec)
+true <- rep(0,length(gene_name))
+true[which(gene_name %in% DEG_iv[[2]])] <- 1
+dt <- data.frame(as.factor(true),t(score_ct[[2]]))
+names(dt) <- c("true","score")
+dt2 <- data.frame(as.factor(true),t(score_pt[[2]]))
+names(dt2) <- c("true","score")
+
+sscurves <- evalmod(scores=dt$score,labels=dt$true)
+autoplot(sscurves,"PRC")
+
+scores <- list(dt$score,dt2$score)
+msmdat <- mmdata(scores,true,modnames = c("ct","pt"))
+
+c <- evalmod(msmdat)
+autoplot(c,"PRC")
+```
+
+```{r}
+pr_auc_ct <- c()
+pr_auc_pt <- c()
+pr_auc_tf <- c()
+pr_auc_sia <- c()
+pr_curve <- list()
+for (i in 1: nrow(test_cmb_ix)){
+  true <- rep(0,length(gene_name))
+  true[which(gene_name %in% DEG_iv[[i]])] <- 1
+  bsl <- rep(0,length(gene_name))
+  dt <- data.frame(as.factor(true),t(score_ct[[i]]))
+  names(dt) <- c("true","score")
+  dt2 <- data.frame(as.factor(true),t(score_pt[[i]]))
+  names(dt2) <- c("true","score")
+  dt3 <- data.frame(as.factor(true),t(score_tf[[i]]))
+  names(dt3) <- c("true","score")
+  dt4 <- data.frame(as.factor(true),t(score_sia[[i]]))
+  names(dt4) <- c("true","score")
+  dt5 <- data.frame(as.factor(true),bsl)
+  names(dt5) <- c("true","score")
+  scores <- list(dt$score,dt2$score,dt3$score,dt4$score,dt5$score)
+  msmdat <- mmdata(scores,true,modnames = c("cell type","perturbation","two-factor","SI-A","baseline"))
+  pr_curve[[i]] <- evalmod(msmdat)
+  aucs <- auc(pr_curve[[i]])
+  pr_auc_ct[i] <- aucs[2,4]
+  pr_auc_pt[i] <- aucs[4,4]
+  pr_auc_tf[i] <- aucs[6,4]
+  pr_auc_sia[i] <- aucs[8,4]
+  p <- autoplot(pr_curve[[i]],"PRC")
+  print(p)
+}
+```
+
+```{r}
+prc <- autoplot(pr_curve[[39]],"PRC")
+prc
+```
+
+```{r}
+curvedf <- fortify(pr_curve[[39]])
+p_pr <- ggplot(subset(curvedf, curvetype == "PRC"), aes(x=x, y=y, colour = modname))+theme_bw()+geom_line()+xlab("Recall")+ylab("Precision")+ggtitle("Precision-Recall, P: 348, N: 17863")+scale_colour_discrete(name="Model", labels=c(paste0("Cell type, AUC: ",round(pr_auc_ct[39],3)),paste0("Perturbation, AUC: ",round(pr_auc_pt[39],3)),paste0("Two-factor, AUC: ",round(pr_auc_tf[39],3)),paste0("SI-A, AUC: ",round(pr_auc_sia[39],3)),paste0("Baseline, AUC: ",round(348/18211,3))))
+p_pr
+```
+
+
+```{r}
+mthd <- c("cell type", "perturbation","two-factor","SIA","Baseline")
+auc_bar <- c(pr_auc_ct[39],pr_auc_pt[39],pr_auc_tf[39],pr_auc_sia[39],348/(348+17863))
+auc_bar <- round(auc_bar,2)
+dt_auc <- data.frame(mthd,auc_bar)
+names(dt_auc) <- c("method","AUC_PR")
+
+p_auc_bar <- ggplot(dt_auc, aes(y=AUC_PR, x=method)) + geom_bar(position = "dodge", stat="identity", fill="blue")+geom_text(aes(label = AUC_PR),position = position_dodge(width = 0.9), vjust=-0.3)+xlab("Model")+ylab(TeX("AUC-PR")) +ylim(c(0,1))+theme_bw()
+p_auc_bar
+```
+
 ```{r}
 ##dot plot PR_AUC
 mthd <- c(rep("cell type",100),rep("perturbation",100),rep("two-factor",100),rep("SIA",100))
-prauc <- c(pr_auc_ct,pr_auc_pt,pr_auc_tf,pr_auc_sia)
-prauc <- round(prauc,2)
+AUC_PR <- c(pr_auc_ct,pr_auc_pt,pr_auc_tf,pr_auc_sia)
+AUC_PR <- round(prauc,2)
 dt <- data.frame(mthd,prauc)
 names(dt) <- c("method","AUC-PR")
 
 pdf("dot_auc.pdf",height = 5, width = 7)
-ggplot(dt, aes(x=method, y= prauc)) + geom_dotplot(binaxis = "y", stackdir = "center", stackratio = 0.6, dotsize = 0.3, fill="#FFAAD4")+stat_summary(fun.data="mean_sdl", fun.args = list(mult=1), geom="pointrange",color="blue")+stat_summary(fun.y=mean, geom="label", aes(label = round(..y.., 2)), hjust = -1, vjust=-0.1)+scale_x_discrete(limits=c("cell type","perturbation","two-factor","SIA"))+theme_bw()
+ggplot(dt, aes(x=method, y= AUC_PR)) + geom_dotplot(binaxis = "y", stackdir = "center", stackratio = 0.6, dotsize = 0.3, fill="blue")+stat_summary(fun.data="mean_sdl", fun.args = list(mult=1), geom="pointrange",color="red")+stat_summary(fun.y=mean, geom="label", aes(label = round(..y.., 2)), hjust = -1, vjust=-0.1)+scale_x_discrete(limits=c("cell type","perturbation","two-factor","SIA"))+theme_bw()
 dev.off()
 
+```
+
+
+```{r}
+mthd <- c(rep("Cell type",100),rep("Perturbation",100),rep("Two-factor",100),rep("SI-A",100))
+r2_d0 <- c(r2_ct_d0,r2_pt_d0,r2_tf_d0,r2_sia_d0)
+r2_d0 <- round(r2_d0,2)
+dt_d0 <- data.frame(mthd,r2_d0)
+names(dt_d0) <- c("method","r2")
+
+r2_d1 <- c(r2_ct_d1,r2_pt_d1,r2_tf_d1,r2_sia_d1)
+r2_d1 <- round(r2_d1,2)
+dt_d1 <- data.frame(mthd,r2_d1)
+names(dt_d1) <- c("method","r2")
+
+r2_d2 <- c(r2_ct_d2,r2_pt_d2,r2_tf_d2,r2_sia_d2)
+r2_d2 <- round(r2_d2,2)
+dt_d2 <- data.frame(mthd,r2_d2)
+names(dt_d2) <- c("method","r2")
+
+d <- c(rep("d1",400),rep("d2",400),rep("d3",400))
+dt <- data.frame(rbind(dt_d0,dt_d1,dt_d2),d)
+
+p_dot_r2 <- ggplot(dt, aes(x=method, y= r2, fill=d)) +geom_violin(position=position_dodge(1), trim = FALSE) + geom_dotplot(binaxis = "y", stackdir = "centerwhole", stackratio = 0.8, dotsize = 0.6, binwidth = 1/100, position=position_dodge(1))+stat_summary(fun="mean", geom = "crossbar", position = position_dodge(1), colour="red")+scale_x_discrete(limits=c("Cell type","Perturbation","Two-factor","SI-A"))+scale_fill_discrete(name="Donor", labels=c("Donor 1", "Donor 2", "Donor 3"))+theme_bw()+ylab(TeX("$R^2$"))
+
+p_dot_r2
+```
+
+```{r}
+mthd <- c(rep("Cell type",100),rep("Perturbation",100),rep("Two-factor",100),rep("SI-A",100))
+AUC_PR <- c(pr_auc_ct,pr_auc_pt,pr_auc_tf,pr_auc_sia)
+AUC_PR <- round(prauc,2)
+dt <- data.frame(mthd,prauc)
+names(dt) <- c("method","AUC-PR")
+
+p_dot_auc <- ggplot(dt, aes(x=method, y= AUC_PR))+geom_violin(trim=FALSE, fill="#619CFF") + geom_dotplot(binaxis = "y", stackdir = "centerwhole", stackratio = 1, dotsize = 0.6, fill="#619CFF", binwidth = 1/80)+stat_summary(fun="mean", geom="crossbar",color="red")+scale_x_discrete(limits=c("Cell type","Perturbation","Two-factor","SI-A"))+theme_bw()+ylab(TeX("AUC-PR"))
+p_dot_auc
+```
+
+```{r}
+pdf("sec4_2.pdf", height = 5, width=15)
+plot_grid(p_dot_r2,NULL,p_dot_auc,nrow=1,labels = c("a","","b"),rel_widths = c(1.4,0.1,1))
+dev.off()
 ```
 
 ```{r}
@@ -1940,11 +2010,9 @@ names(auc_pr) <- c("baseline","ct","pt","tf","sia")
 apply(auc_pr,2,mean)
 ``` 
 
-## Generate Plots for manuscript
+## Individual case: T cells CD4+ Perhexiline
 
-### Individual case: T cells CD4+ Perhexiline
-
-#### R2 scatter plot
+### R2 scatter plot
 ```{r}
 status <- rep("non DE", length(gene_name))
 status[which(gene_name %in% DEG_iv[[39]])] <- "DE"
@@ -1978,19 +2046,59 @@ dt_r2 <- data.frame(rbind(dt_r2_ct,dt_r2_pt,dt_r2_tf,dt_r2_sia))
 method <- c(rep("Cell type",nrow(dt_r2_ct)),rep("Perturbation",nrow(dt_r2_pt)),rep("Two-factor",nrow(dt_r2_tf)),rep("SIA",nrow(dt_r2_sia)))
 dt_r2 <- data.frame(dt_r2,method)
   
-dt_r2$method <- factor(dt_r2$method, labels = c(TeX(paste("Cell type, $R^2 = $", r2_ct_d0[42])),TeX(paste("Perturbation, $R^2 = $", r2_pt_d0[42])),TeX(paste("Two-factor, $R^2 = $", r2_tf_d0[42])),TeX(paste("SIA, $R^2 = $", r2_sia_d0[42]))))
+dt_r2$method <- factor(dt_r2$method, labels = c(TeX(paste("Cell type, $R^2 = $", r2_ct_d0[42])),TeX(paste("Perturbation, $R^2 = $", r2_pt_d0[42])),TeX(paste("Two-factor, $R^2 = $", r2_tf_d0[42])),TeX(paste("SI-A, $R^2 = $", r2_sia_d0[42]))))
   
-  p_r2 <- ggplot(dt_r2, aes(x=prediction, y=observation, color=status)) + 
-  geom_point()+
+  p_r2 <- ggplot(dt_r2, aes(x=prediction, y=observation)) + 
+  geom_point(aes(color=status, alpha=status,size = status))+
   geom_smooth(method=lm, na.rm = TRUE,colour="black")+
-  scale_colour_manual(name="status", values=c("red","blue"))+
-  xlab("predicted stimulated expressions") + ylab("In vitro stimulated expressions")+facet_wrap(~method,nrow = 2,labeller = label_parsed)+theme_bw()+theme(strip.text = element_text(size=12))+ theme(legend.position="bottom")+theme(axis.title = element_text(size=12))
+  scale_colour_manual(name="status", values=c("red","blue"))+scale_alpha_manual(values=c(1,0.1))+scale_size_manual(values=c(0.7,0.3))+
+  xlab("predicted perturbed expressions") + ylab("In vitro perturbed expressions")+facet_wrap(~method,nrow = 2,labeller = label_parsed)+theme_bw()+theme(strip.text = element_text(size=12))+ theme(legend.position="right")+theme(axis.title = element_text(size=12))
   print(p_r2)
 ```
 
-#### Volcano plot
-
 ```{r}
+mthd <- c("cell type", "perturbation","two-factor","SIA")
+r2_d0 <- c(r2_ct_d0[42],r2_pt_d0[42],r2_tf_d0[42],r2_sia_d0[42])
+r2_d0 <- round(r2_d0,2)
+dt_d0 <- data.frame(mthd,r2_d0)
+names(dt_d0) <- c("method","r2")
+
+
+r2_d1 <- c(r2_ct_d1[42],r2_pt_d1[42],r2_tf_d1[42],r2_sia_d1[42])
+r2_d1 <- round(r2_d1,2)
+dt_d1 <- data.frame(mthd,r2_d1)
+names(dt_d1) <- c("method","r2")
+
+r2_d2 <- c(r2_ct_d2[42],r2_pt_d2[42],r2_tf_d2[42],r2_sia_d2[42])
+r2_d2 <- round(r2_d2,2)
+dt_d2 <- data.frame(mthd,r2_d2)
+names(dt_d2) <- c("method","r2")
+
+d <- c(rep("d1",4),rep("d2",4),rep("d3",4))
+dt <- data.frame(rbind(dt_d0,dt_d1,dt_d2),d)
+
+p_r2_bar <- ggplot(dt, aes(y=r2, x=method)) + geom_bar(position = "dodge", stat="identity", fill="blue")+geom_text(aes(label = r2),position = position_dodge(width = 0.9), vjust=-0.3)+xlab("Model")+ylab(TeX("$R^2$")) +ylim(c(0,1))+facet_wrap(~d)+theme_bw()
+p_r2_bar
 
 ```
 
+```{r}
+curvedf <- fortify(pr_curve[[39]])
+p_pr <- ggplot(subset(curvedf, curvetype == "PRC"), aes(x=x, y=y, colour = modname))+theme_bw()+geom_line()+xlab("Recall")+ylab("Precision")+ggtitle("Precision-Recall, P: 348, N: 17863")+scale_colour_discrete(name="Model", labels=c(paste0("Cell type, AUC: ",round(pr_auc_ct[39],3)),paste0("Perturbation, AUC: ",round(pr_auc_pt[39],3)),paste0("Two-factor, AUC: ",round(pr_auc_tf[39],3)),paste0("SI-A, AUC: ",round(pr_auc_sia[39],3)),paste0("Baseline, AUC: ",round(348/18211,3))))
+p_pr
+```
+
+```{r}
+library(cowplot)
+row1 <- plot_grid(p_r2,NULL,prc,nrow=1,labels = c("a","","b"),align = "h",axis = "t",rel_widths = c(1,0.4,1))
+row2 <- plot_grid(p_r2_bar,NULL,p_auc_bar,nrow=1,labels = c("c","","d"),align = "h",axis = "t",rel_widths = c(1,0.1,0.6))
+
+pdf("sec4_1.pdf",height=5,width = 15)
+plot_grid(p_r2,NULL,p_pr,nrow=1,labels = c("a","","b"),align = "h",axis = "t",rel_widths = c(1,0.2,1))
+dev.off()
+
+```
+
+```{r}
+#KableExtra
+```
