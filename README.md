@@ -1,4 +1,10 @@
-# Cell-Perturbation-Metric
-## In this repo, we focus on testing new evaluation metric for predicitons on cell line perturbation experiments.
-## The code and results for pbmc data is in the folder "pbmc"
-## The works for kaggle data is in the folder "kaggle".
+## Cell-Perturbation-Metric
+
+We propose a new model performance evaluation metric that measure the model's ability to identify differentially expressed genes.
+
+[flow_chart_new.pdf](https://github.com/user-attachments/files/18320973/flow_chart_new.pdf)
+
+### Contents
+1. pbmc/ code for running in silico models and generate evaluation results on Kang et al.'s PBMC dataset
+2. Kaggle/ code for running in silico models and generate evaluation results on Kaggle dataset
+
