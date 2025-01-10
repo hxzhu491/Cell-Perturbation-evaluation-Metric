@@ -1977,7 +1977,7 @@ names(dt_d2) <- c("method","r2")
 d <- c(rep("d1",400),rep("d2",400),rep("d3",400))
 dt <- data.frame(rbind(dt_d0,dt_d1,dt_d2),d)
 
-p_dot_r2 <- ggplot(dt, aes(x=method, y= r2, fill=d)) +geom_violin(position=position_dodge(1), trim = FALSE) + geom_dotplot(binaxis = "y", stackdir = "centerwhole", stackratio = 0.8, dotsize = 0.6, binwidth = 1/100, position=position_dodge(1))+stat_summary(fun="mean", geom = "crossbar", position = position_dodge(1), colour="red")+scale_x_discrete(limits=c("Cell type","Perturbation","Two-factor","SI-A"))+scale_fill_discrete(name="Donor", labels=c("Donor 1", "Donor 2", "Donor 3"))+theme_bw()+ylab(TeX("$R^2$"))
+p_dot_r2 <- ggplot(dt, aes(x=method, y= r2, fill=d)) +geom_violin(position=position_dodge(1), trim = FALSE) + geom_dotplot(binaxis = "y", stackdir = "centerwhole", stackratio = 0.8, dotsize = 0.6, binwidth = 1/100, position=position_dodge(1))+stat_summary(fun="mean", geom = "crossbar", position = position_dodge(1), colour="red")+scale_x_discrete(limits=c("Cell type","Perturbation","Two-factor","SI-A"))+scale_fill_discrete(name="Donor", labels=c("Donor 1", "Donor 2", "Donor 3"))+theme_bw()+ylab(TeX("$R^2$"))+xlab(TeX("In Silico Model"))
 
 p_dot_r2
 ```
@@ -1989,7 +1989,7 @@ AUC_PR <- round(prauc,2)
 dt <- data.frame(mthd,prauc)
 names(dt) <- c("method","AUC-PR")
 
-p_dot_auc <- ggplot(dt, aes(x=method, y= AUC_PR))+geom_violin(trim=FALSE, fill="#619CFF") + geom_dotplot(binaxis = "y", stackdir = "centerwhole", stackratio = 1, dotsize = 0.6, fill="#619CFF", binwidth = 1/80)+stat_summary(fun="mean", geom="crossbar",color="red")+scale_x_discrete(limits=c("Cell type","Perturbation","Two-factor","SI-A"))+theme_bw()+ylab(TeX("AUC-PR"))
+p_dot_auc <- ggplot(dt, aes(x=method, y= AUC_PR))+geom_violin(trim=FALSE, fill="#619CFF") + geom_dotplot(binaxis = "y", stackdir = "centerwhole", stackratio = 1, dotsize = 0.6, fill="#619CFF", binwidth = 1/80)+stat_summary(fun="mean", geom="crossbar",color="red")+scale_x_discrete(limits=c("Cell type","Perturbation","Two-factor","SI-A"))+theme_bw()+ylab(TeX("AUC-PR"))+xlab(TeX("In Silico Model"))
 p_dot_auc
 ```
 
