@@ -29,5 +29,7 @@ Instructions for using the pseudo-bulking folder:
 
 6. Run Convert_input.ipynb to get csv files of the cell type DE input files (h5ad). These files are under folder input_obs.
 
+7. The main results in the manuscript are generated in Kaggle_analysis_new.Rmd.
+
 
 
