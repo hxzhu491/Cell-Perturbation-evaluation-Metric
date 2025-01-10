@@ -806,6 +806,8 @@ for (i in 1:length(ctype)){
 ### Precision recall curve with current threshold
 
 ```{r}
+pr_dt <- list()
+
 for (i in 1: length(ctype)){
   true <- rep(0,length(genes))
   true[which(genes %in% DEG_genes_obs[[i]])] <- 1
@@ -829,7 +831,21 @@ for (i in 1: length(ctype)){
          theme_bw()+
          ggtitle(ctype[[i]])
          print(p)
+         
+    pr_dt[[i]] <- p$data
 }
+```
+
+```{r}
+scgen_pr <- list()
+tf_pr <- list()
+
+for (i in 1:7){
+  scgen_pr[[i]] <- pr_dt[[i]][pr_dt[[i]]$method=="scgen",]
+  tf_pr[[i]] <- pr_dt[[i]][pr_dt[[i]]$method=="two-factor",]
+}
+
+scgen_pr_50 <- c(max(scgen_pr[[1]]$precision[round(scgen_pr[[1]]$recall,2)>=0.5]))
 ```
 
 ```{r}
