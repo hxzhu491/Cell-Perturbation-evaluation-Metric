@@ -204,6 +204,11 @@ for (i in 1: length(sn)){
 
 ## We get the same results as the reference file
 ```
+```{r}
+## save DEG results
+write.csv(DE_lfc_df, "DE_lfc_df.csv", row.names = FALSE)
+write.csv(DE_p_value_df, "DE_p_value_df.csv", row.names = FALSE)
+```
 
 ## Overview of full data
 

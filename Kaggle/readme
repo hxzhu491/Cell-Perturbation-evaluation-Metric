@@ -23,7 +23,7 @@ Instructions for using the pseudo-bulking folder:
 
 3. This code also generate input data for DE analysis (based on limma model). After running the code, 6 folder with the name "cell_type_[name]" will be created and the input file for each cell type is stored in these folders.
 
-4. r_code.sh file will also be generated. This is the command line program that calls limma model in R. Required R files are limma_contrast.r and limma_fit.r. r_install.r contains necessary packages.
+4. r_code.sh file will also be generated. This is the command line program that calls limma model in R. Required R files are limma_contrast.r and limma_fit.r. r_install.r contains necessary packages. Should install required packages first to run r_code.sh. 
 
 5. Run r_code.sh in terminal to get DE results. The results for each cell type will be stored under the cell type folders. These results will further used in Kaggle_analysis_new.Rmd.
 
