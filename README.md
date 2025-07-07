@@ -2,7 +2,7 @@
 
 We propose a new model performance evaluation metric that measure the model's ability to identify differentially expressed genes.
 
-<img width="1390" alt="Screenshot 2025-01-06 at 9 10 31 AM" src="https://github.com/user-attachments/assets/7ae1be3f-88b6-4160-aa59-004745de56a3" />
+<img width="1390" alt="Fig.1" src="https://github.com/user-attachments/assets/34977c20-2c53-4d1a-8004-2eaf6d43ebd3" />
 
 
 ### Contents
